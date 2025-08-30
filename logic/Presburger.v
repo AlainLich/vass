@@ -470,43 +470,10 @@ elim: f b1 b2 => //=.
     rewrite mem_iota absz_gt0 subr_eq0 neq_lt H orbT /= add1n ltnS.
     move: (ltW H); rewrite -lez_nat ler_def abszE => /eqP ->.
 
-    move: H.  rewrite !intS ( modz_dvd x (1 + m)%Z) intS.
-    set X1m:= (x %% (1 + m))%Z. move =>H H1.
-    have Hcz: forall (k:nat), ((k == 0) || (0 < k))%nat; 
-      first by move =>k; elim :k =>//=.
-    case/orP: (Hcz m) => [ Hmz| Hmnz]. 
-    - move :H; rewrite (eqP Hmz) addr0 => H.   (* X1m in int, could be negative ! *)   
-      have H2m: 1 + m != 0%R by rewrite (eqP Hmz).  
-      have := (modz_ge0 x (d:=1+m))  H2m.
-      rewrite -/X1m => H' {H2m}.
-      move :H. rewrite -[X in (_ < X)%R]add0r.
-      rewrite ltzD1.  move : H'. move => HH1 HH2. 
-      by apply/eqP; symmetry; apply: le_anti =>//=; apply/andP.
-    -  (* Here 0 <= X1m , in case 0 = X1m, Goal satisfied, otherwise apply H1*)
-        have HX1m: (0%R <= X1m)%R by
-            rewrite /X1m;  apply: modz_ge0; 
-            have HX1m: 0 <  (1 + m)%R; first by apply: (@addr_gt0 int 1 m) =>//= ;    
-            apply/eqP => Hn //=.
-        
-        case HX1m':(0%Z == X1m) =>//=; first  by rewrite eq_sym HX1m'.
-
-        (* now 0 <> X1m, we use 0 < X1m to establish the condition/implicant in H1*)           
-        have H1pre: is_true (1 + Posz m - X1m <= Posz m)%R.
-           rewrite lerBlDl; apply: lerD =>//=.
-           by have HX1mP: (1 <= X1m)%R by rewrite ltler HX1m' // in HX1m.
- 
-      move:  {H1 H1pre} (H1 H1pre) ; rewrite /X1m => HFalseDiv.
-      exfalso. move: HFalseDiv. 
-      
-      set k:= (1 + Posz m)%R.
-      set k':= Posz (1 +  m)%R.
-
-      rewrite /negb.   
-      case Hczdiv: (k %| (k - (x %% k')%Z + x)%R)%Z =>//= _.
-      move: Hczdiv. rewrite addr_opp2. 
-      have -> : k = k' by []. move => {k} //=.
-      by rewrite modz_dvd modzDl  -modzDm  modzNm  modzDm subrr //=.
-
+    rewrite lerBDl intS lerD2r -intS.
+    move/implyP; rewrite implybN -ltNge -(addr0 1%R) ltz1D => /implyP H0.
+    apply/dvdz_mod0P/eqP; rewrite eq_le modz_ge0 // {}H0 //; apply/dvdz_mod0P.
+    by rewrite -addrA modzDl addrC {1}(divz_eq x m.+1) -addrA modzMDl subrr.
 Qed.    
 
 
@@ -666,71 +633,13 @@ rewrite -(vsubmxK t) tr_col_mx (mxE col_mx_key);
   case: splitP => // j _;
   rewrite ord1 {j} vsubmxK mul_row_col 2!mxE big_ord1 3!mxE lshift0.
 
-(case: (ltrgtP (t 0 0) 0)%R (prod_coef_cml Hf);
+by (case: (ltrgtP (t 0 0) 0)%R (prod_coef_cml Hf);
       last by move=> -> _ /=; rewrite mul0r add0r andbT);
-  rewrite dvdz_eq => /= H /eqP H0; 
+  rewrite dvdz_eq => /= H /eqP H0;
   rewrite ?andbT linearZ /= -scalemxAl (mxE scalemx_key) -mulrDr
-          -1?[RHS](ler_nmul2l H) -1?[RHS](ler_pmul2l H);
-  rewrite lerXoppr   -{2}H0 -!mulNr  -mulrA;
-  [ have Hsign:= ltr0_sgz H | have Hsign:= gtr0_sgz H ];
-  rewrite Hsign mulNr  -mulrN  mulrCA ?mul1r;
-
-  (*clarify notations, works in both subgoals*)
-  set xA:= t ord0 ord0 in H0 H *;
-  set xB:= ((dsubmx t)^T *m I)%R ord0 ord0;
-  set xC:= ((prod_coef %/ xA)%Z * xA)%R.
-  (* reached here 2 subgoals *)
-- (* Do first subgoal sgz = -1 *)
-  rewrite mulN1r opprK.
-  set xD:=  (prod_coef %/ `|xA|)%N.
-  
-  rewrite mulrCA; (* This worked despite coercions/Posz present *)
-  rewrite  -mulrDr; 
-  replace (n + (xA * x + xB))%R with (n + xB + xA * x)%R; 
-   last by rewrite -addrA; congr (_ + _)%R; rewrite addrC.  
-
-  have HxD:= prod_coef_gt0.  
- (* Need to establish 0 < xD, simplest is to use H0 ... only issue is type
-    and presence of Posz  coercion *)
-  case: (orP (eq_orgt0 xD)); last by move =>HmulNZ ; rewrite pmulr_rge0. 
-    - rewrite/xD => H1; exfalso.
-      move : H1;   
-      have HxA:  xA = ( -1 * `|xA|)%R; first  by rewrite -Hsign -intEsg.
-      have {HxA}:=f_equal (fun x => (-1 * x)%R) HxA.
-      rewrite mulrA mulrNN !mul1r // => Hrew.
-      have H1: (prod_coef %/ xA)%Z  = ((- 1) * (prod_coef %/ `|xA|)%Z)%R
-      by  rewrite   -Hrew; replace (-1 * xA)%R with (- xA)%R;
-          [rewrite divzN mulN1r opprI |  rewrite mulN1r ]; move => //= .
-      move/eqP =>H2.
-      move:H1. 
-      have H3: (prod_coef %/ `|xA|)%Z =  prod_coef %/ `|xA| by apply: divnzN.
-      rewrite H2 in H3. rewrite H3 mulr0 => H4. 
-      move: H0; rewrite H4 mul0r => H5.
-      move: HxD; replace prod_coef with 0; first by []. 
-      by apply/eqP; rewrite  -eqz_nat //=; apply/eqP.
-   
-- (* second subgoal *)
-  rewrite subr0 [X in _ = X]lerXoppl mulr_oppK.
-  rewrite [X in _ = (0 <= (_ + X))%R]mulrC.
-  have HxA:= (gtz0_abs H). (* Just hit the same tar pit !*)
-  have H3: (prod_coef %/ `|xA|)%Z = prod_coef %/ `|xA| by apply: divnzN.
-  rewrite -H3.
-  have H4: (prod_coef %/ `|xA|)%Z  = (prod_coef %/ xA)%Z by
-    congr (fun x => divz prod_coef x);  rewrite -[X in _ = X]HxA.
-
-  rewrite -H4.  rewrite -[(_ * x * xA)%R]mulrA  -mulrDr.
-
-  set xD:=  (prod_coef %/ `|xA|)%N in H3 * .
-  have HxD:= prod_coef_gt0.
-  case: (orP (eq_orgt0 xD)) => [HxDZ | HxDP]. 
-   - by exfalso; rewrite /xD in HxDZ H3;
-       move:H0; rewrite -H4 H3 (eqP HxDZ) mul0r => Hr; move: HxD; 
-      rewrite -ltz_nat -Hr.
-
-   - replace (n + (xA * x + xB))%R with (n + xB + xA * x)%R; 
-            last by rewrite -addrA; congr (_ + _)%R; rewrite addrC.
-     rewrite pmulr_rge0. by rewrite mulrC.  
-       by rewrite H3.
+          -1?[RHS](ler_nM2l H) -1?[RHS](ler_pM2l H) mulrA mulrN
+          [X in (- X)%R](mulrC (t _ _)) H0 mulNr -mulrN mulrCA ler_pM2l
+          ?ltz_nat ?prod_coef_gt0 // -(subr_ge0 (- _)%R) opprK (addrCA n).
 Qed.
 
 
@@ -843,6 +752,7 @@ apply/(iffP andP) => -[H0 H]; (split; first apply: H0);
     rewrite addr0 !dvdzE'; congr eq_op; apply/eqP.
     rewrite eqz_mod_dvd !(addrC f.1.2) -!(addrA _ f.1.2)
             opprD addrA (addrAC x)  -addrA.
+            
     rewrite -oppM -addrC  -addrA.
     set F2:= (Z in ( - _   + ( _ +Z) )%R).
     rewrite -/F2 addrC oppM3 opprI; last by [].
