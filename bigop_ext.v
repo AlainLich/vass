@@ -9,6 +9,11 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+Fact iota_sDl m n :[seq m + i  | i <- iota 0 n] = iota m n.
+Proof.
+by rewrite -iotaDl addn0.
+Qed.
+
 Module Semilattice.
 
 Section Definitions.
@@ -31,9 +36,10 @@ Definition clone_law op :=
 
 End Definitions.
 
+
 Module Import Exports.
 Coercion operator : law >-> Funclass.
-Notation "[ 'semilattice' 'of' f ]" := (@clone_law _ _ f _ id _ _ _ id)
+Notation "[ 'semilattice' 'of' f ]" := ( @clone_law _ _ f _ id _ _ _ id)
   (at level 0, format"[ 'semilattice'  'of'  f ]") : form_scope.
 End Exports.
 
@@ -65,12 +71,12 @@ Export Semilattice.Exports.
 
 Section PervasiveSemilattices.
 
-Variable (disp : unit) (T : latticeType disp).
+Variable (disp : Order.disp_t) (T : latticeType disp).
 
 Canonical maxr_semilattice :=
-  Semilattice.Law (@joinA _ T) (@joinC _ T) (@joinxx _ T).
+  Semilattice.Law ( @joinA _ T) ( @joinC _ T) ( @joinxx _ T).
 Canonical minr_semilattice :=
-  Semilattice.Law (@meetA _ T) (@meetC _ T) (@meetxx _ T).
+  Semilattice.Law ( @meetA _ T) ( @meetC _ T) ( @meetxx _ T).
 
 End PervasiveSemilattices.
 
@@ -134,9 +140,22 @@ rewrite !(big_mkcond_l _ P); elim: r1 => /= [|i r1 IH].
 - by rewrite !big_cons IH joinA.
 Qed.
 
+
+(** This is a replacement for deprecated, see note in  bigop.v concerning
+  convertibility of [enum A] and [filter A (index_enum T)] 
+*)
+Fact re_filter_index_enum : forall [T : finType] (P : pred T), 
+[seq x <- index_enum T  | P x] = enum P.
+Proof.
+by move => T P; apply eq_enum.
+Qed.
+
+
 Lemma big_pred1_eq_l (I : finType) (i : I) F :
   \big[||%L/0]_(j | j == i) F j = F i || 0.
-Proof. by rewrite -big_filter filter_index_enum enum1 unlock. Qed.
+Proof. 
+ by rewrite -big_filter re_filter_index_enum enum1 unlock. 
+Qed.
 
 Lemma big_pred1_l (I : finType) i (P : pred I) F :
   P =1 pred1 i -> \big[||%L/0]_(j | P j) F j = F i || 0.
@@ -148,13 +167,18 @@ Lemma big_cat_nat_l n m p (P : pred nat) F : m <= n -> n <= p ->
   (\big[||%L/0]_(n <= i < p | P i) F i).
 Proof.
 move=> le_mn le_np.
-by rewrite -big_cat_l -{2}(subnKC le_mn) -iota_add subnDA subnKC // leq_sub.
+have Hp_in : p - m = (n - m + (p - (m + (n - m)))).
+- rewrite subnKC //  addnC. 
+  have H1: m = (n - ( n - m)) by rewrite subKn. 
+  rewrite {1} H1.
+  by rewrite -H1  addBnAC //= addnC -addnBAC //= addBnA //=; [rewrite -H1| rewrite leq_subr].
+by rewrite -big_cat_l -{2}(subnKC le_mn) -iotaD /= -Hp_in.
 Qed.
 
 Lemma big_nat_recr_l n m F : m <= n ->
   \big[||%L/0]_(m <= i < n.+1) F i = (\big[||%L/0]_(m <= i < n) F i) || F n.
 Proof.
-move=> lemn; rewrite (@big_cat_nat_l n) ?leqnSn //.
+move=> lemn; rewrite ( @big_cat_nat_l n) ?leqnSn //.
 rewrite (big_ltn (leqnn n.+1)) (big_geq (leqnn n.+1)).
 by rewrite joinC -joinA big_join0 joinC.
 Qed.
@@ -182,11 +206,12 @@ Lemma big_split_ord_l m n (P : pred 'I_(m + n)) F :
          (\big[||%L/0]_(i | P (lshift n i)) F (lshift n i))
       || (\big[||%L/0]_(i | P (rshift m i)) F (rshift m i)).
 Proof.
-rewrite -(big_map (lshift n) P F) -(big_map (@rshift m _) P F).
+rewrite -(big_map (lshift n) P F) -(big_map ( @rshift m _) P F).
 rewrite -big_cat_l; congr bigop; apply: (inj_map val_inj).
 rewrite /index_enum -!enumT val_enum_ord map_cat -map_comp val_enum_ord.
+
 rewrite -map_comp (map_comp (addn m)) val_enum_ord.
-by rewrite -iota_addl addn0 iota_add.
+by rewrite iota_sDl iotaD add0n. 
 Qed.
 
 Lemma big_flatten_l I rr (P : pred I) F :
@@ -213,7 +238,7 @@ Lemma big_uniq_l (I : finType) (r : seq I) F :
   uniq r -> \big[||%L/0]_(i <- r) F i = \big[||%L/0]_(i in r) F i.
 Proof.
 move=> uniq_r; rewrite -(big_filter _ (mem r)); apply: eq_big_perm_l.
-by rewrite filter_index_enum uniq_perm ?enum_uniq // => i; rewrite mem_enum.
+by rewrite re_filter_index_enum uniq_perm ?enum_uniq // => i; rewrite mem_enum.
 Qed.
 
 Lemma big_rem_l (I : eqType) r x (P : pred I) F :

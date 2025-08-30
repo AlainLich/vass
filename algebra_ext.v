@@ -11,14 +11,20 @@ Lemma addr_lteif0r b (R : numDomainType) (x y : R) :
 Proof. by rewrite addrC -{1}(opprK x) subr_lteif0r. Qed.
 
 (******************************************************************************)
-(*  extensions for interval                                                   *)
+(*  extensions for interval. Start with PO:= partial order                    *)
 (******************************************************************************)
 
 Section IntervalPo.
 
 Local Open Scope order_scope.
 
-Variable (disp : unit) (T : porderType disp).
+
+(** Note: Order.disp is used to give alternative keys to multiple HB instances
+  which apply on the same type. (e.g. several "orders" are used with nat, see example
+  the second is related to divisibility!)
+*)
+
+Variable (disp : Order.disp_t) (T : porderType disp).
 Notation itv_bound := (itv_bound T).
 Notation interval := (interval T).
 
@@ -38,11 +44,14 @@ Definition itv_nonempty (i : interval) :=
 
 End IntervalPo.
 
+(******************************************************************************)
+(*  extensions for interval. Now Lattice case.                                *)
+(******************************************************************************)
 Section IntervalLattice.
 
 Local Open Scope order_scope.
 
-Variable (disp : unit) (T : latticeType disp).
+Variable (disp : Order.disp_t) (T : latticeType disp).
 
 Lemma in_itv_bigI S x (s : seq S) (f : S -> interval T) :
   (x \in \big[Order.meet/`]-oo, +oo[%O]_(ix <- s) f ix) =
@@ -53,11 +62,17 @@ Qed.
 
 End IntervalLattice.
 
+(******************************************************************************)
+(*  extensions for interval. Now Interval with total order.                   *)
+(******************************************************************************)
+
+(*  See (in  ssreflect.order) SemiLattice definitions *)
+
 Section IntervalTotal.
 
 Local Open Scope order_scope.
 
-Variable (disp : unit) (T : orderType disp).
+Variable (disp : Order.disp_t) (T : orderType disp).
 
 Lemma itv_total_meetsE (S : Type) (s : seq S) (f : S -> interval T) :
   \meet_(ix <- s) f ix \in
@@ -69,9 +84,9 @@ elim: s x => [|y s ih] x; rewrite !big_cons;
 move: (itv_total_meet3E (f x) (f y) (\meet_(ix <- s) f ix)).
 rewrite meetA 3!inE => /or3P [] /eqP ->.
 - by rewrite /= !inE eqxx orbT.
-- move: (ih x); rewrite big_cons 2!allpairs_consr 2!mem_cat allpairs_consr /=.
+- move: (ih x); rewrite big_cons  2!mem_allpairs_consr  2!mem_cat   mem_allpairs_consr /=.
   by rewrite !(mem_cat, inE) -!orbA => /or4P [] ->; rewrite ?orbT.
-- move: (ih y); rewrite big_cons 2!allpairs_consr 2!mem_cat allpairs_consr /=.
+- move: (ih y); rewrite big_cons 2!mem_allpairs_consr 2!mem_cat mem_allpairs_consr /=.
   by rewrite !(mem_cat, inE) -!orbA => /or4P [] ->; rewrite ?orbT.
 Qed.
 
@@ -85,13 +100,14 @@ elim: s x => [|y s ih] x; rewrite !big_cons;
 move: (itv_total_join3E (f x) (f y) (\join_(ix <- s) f ix)).
 rewrite joinA 3!inE => /or3P [] /eqP ->.
 - by rewrite /= !inE eqxx orbT.
-- move: (ih x); rewrite big_cons 2!allpairs_consr 2!mem_cat allpairs_consr /=.
+- move: (ih x); rewrite big_cons 2!mem_allpairs_consr 2!mem_cat mem_allpairs_consr /=.
   by rewrite !(mem_cat, inE) -!orbA => /or4P [] ->; rewrite ?orbT.
-- move: (ih y); rewrite big_cons 2!allpairs_consr 2!mem_cat allpairs_consr /=.
+- move: (ih y); rewrite big_cons 2!mem_allpairs_consr 2!mem_cat mem_allpairs_consr /=.
   by rewrite !(mem_cat, inE) -!orbA => /or4P [] ->; rewrite ?orbT.
 Qed.
 
 End IntervalTotal.
+
 
 Local Open Scope ring_scope.
 
@@ -103,8 +119,8 @@ Proof.
 case: i => [] [c1 x|[]] [c2 z|[]]; apply/(iffP idP) => [|[y /andP[]]] //=.
 - by move=> hxz; exists ((x + z) / 2%:R); apply: mid_in_itv.
 - exact: lteif_trans.
-- by exists (x + 1); rewrite in_itv lteifS // ltr_addl ltr01.
-- by exists (z - 1); rewrite in_itv lteifS // gtr_addl ltrN10.
+- by exists (x + 1); rewrite in_itv lteifS // ltrDl ltr01.
+- by exists (z - 1); rewrite in_itv lteifS // gtrBl ltr01. 
 - by exists 0.
 Qed.
 
@@ -159,12 +175,13 @@ Proof.
 case: i => -[bl lb|[]] [bu ub|[]] //= _ [x Hx].
 - case: (period_noninfinitesimal (lb - x)) => c Hc.
   exists (x + period *+ c); rewrite in_itv andbT; apply/andP; split.
-  + by apply: lteifS; rewrite addrC -ltr_sub_addr.
-  + by elim: c {Hc} => [|c ?];
+  + by apply: lteifS; rewrite addrC -ltrBlDr. 
+  + by elim: c {Hc} => [|c ?]; 
       rewrite ?mulr0n ?addr0 // mulrS addrCA P_periodic.
+
 - case: (period_noninfinitesimal (x - ub)) => c Hc.
   exists (x - period *+ c); rewrite in_itv; apply/andP; split.
-  + by apply: lteifS; rewrite ltr_sub_addr addrC -ltr_sub_addr.
+  + by apply: lteifS; rewrite ltrBlDl -ltrBlDr. 
   + elim: c {Hc} => [|c IH]; first by rewrite mulr0n subr0.
     by rewrite -P_periodic addrCA mulrS opprD (addrA period) subrr sub0r.
 Qed.

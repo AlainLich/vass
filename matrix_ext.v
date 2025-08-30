@@ -3,12 +3,59 @@ Require Import utils algebra_ext.
 Import GroupScope Order.TTheory GRing.Theory Num.Theory.
 
 (******************************************************************************)
-(*  extensions for matrix                                                     *)
+(** * extensions for matrix                                                     *)
 (******************************************************************************)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
+
+(******************************************************************************)
+(** ** convenience.                                                               *)
+(******************************************************************************)
+Section Z_Modules.
+
+Variables (R : zmodType).
+Implicit Types x y : R.
+
+(* The involutive character of - oppr is simply expressed here*)
+Lemma opprI x y : (- - x  = x )%R.
+Proof.
+by apply/eqP; rewrite eqr_oppLR.
+Qed.
+End Z_Modules.
+
+Section R_convenience.
+
+Variables (R : realFieldType).
+Implicit Types x y : R.
+
+
+Lemma mulf_divA (x1 y x2:R)  : (x1  * (x2 / y) = (x1 * x2) / y)%R.
+Proof.
+rewrite -(divr1 x1)  (mulf_div x1 1 x2 y) (divr1 x1) mul1r //=.
+Qed.
+End R_convenience.
+
+
+(******************************************************************************)
+(** **   matrix  proper.                                                          *)
+(******************************************************************************)
+
+Section Matrix_rewrites.
+Variables (R: pzRingType).
+
+
+(* This seems convenient for rewriting... although looks naive*)
+Lemma addmxE [k l]:  forall  ik il (A B: 'M[R]_(l,k)) , 
+        ( A + B )%R ik il = ((A ik il ) + (B ik il))%R.
+Proof. by move => ik il A B; rewrite mxE. Qed.
+
+Lemma oppmxE [k l]:  forall  ik il (A: 'M[R]_(l,k)) , 
+        (- A  )%R ik il = (- (A ik il ))%R.
+Proof. by move => ik il A; rewrite mxE. Qed.
+
+End Matrix_rewrites.
 
 Lemma row_permI (R : Type) (m n : nat) (p : 'S_m) :
   injective (@row_perm R m n p).
@@ -24,7 +71,7 @@ move=> mx1 mx2 /(f_equal (col_perm p^-1)).
 by rewrite -!col_permM mulVg !col_perm1.
 Qed.
 
-Lemma mulmx_cast (R : ringType) m n n' p
+Lemma mulmx_cast (R : pzRingType) m n n' p
       (mx1 : 'M[R]_(m, n)) (mx2 : 'M[R]_(n, p)) (H : n = n') :
   (castmx (erefl _, H) mx1 *m castmx (H, erefl _) mx2 = mx1 *m mx2)%R.
 Proof.
@@ -35,33 +82,54 @@ by apply/eq_bigr => k _; rewrite !castmxE cast_ordK !cast_ord_id.
 Qed.
 
 Lemma mulmx_trl
-      (R : comRingType) m n p (mx1 : 'M[R]_(n, m)) (mx2 : 'M[R]_(n, p)) :
+      (R : comPzRingType) m n p (mx1 : 'M[R]_(n, m)) (mx2 : 'M[R]_(n, p)) :
   (mx1^T *m mx2 = (mx2^T *m mx1)^T)%R.
 Proof. by rewrite trmx_mul trmxK. Qed.
 
 Lemma mulmx_trr
-      (R : comRingType) m n p (mx1 : 'M[R]_(m, n)) (mx2 : 'M[R]_(p, n)) :
+      (R : comPzRingType) m n p (mx1 : 'M[R]_(m, n)) (mx2 : 'M[R]_(p, n)) :
   (mx1 *m mx2^T = (mx2 *m mx1^T)^T)%R.
 Proof. by rewrite trmx_mul trmxK. Qed.
 
-Lemma trmx_sum (R : ringType) m n (I : Type) (r : seq I) (P : I -> bool)
+Lemma trmx_sum (R : pzRingType) m n (I : Type) (r : seq I) (P : I -> bool)
                (A_ : I -> 'M[R]_(m, n)) :
   (\sum_(i <- r | P i) A_ i)^T%R = (\sum_(i <- r | P i) (A_ i)^T)%R.
 Proof. rewrite (@big_morph _ _ trmx 0%R +%R) ?trmx0 //; exact: linearD. Qed.
 
-Lemma mulmx_row_col (R : ringType) m n p (A : 'M[R]_(m, n)) (B : 'M[R]_(n, p))
+Lemma trmx_usub (R : pzRingType) m1 n1 (A : 'M[R]_(m1, n1)) :
+  ((- A)^T = - (A^T))%R.
+Proof. by apply/matrixP => i j; rewrite !mxE. Qed.
+
+Lemma mulmx_row_col (R : pzRingType) m n p (A : 'M[R]_(m, n)) (B : 'M[R]_(n, p))
                     (i : 'I_m) (j : 'I_p) :
   ((A *m B) i j = (row i A *m col j B) 0 0)%R.
 Proof. by rewrite !mxE /=; apply/eq_bigr => k _; rewrite !mxE. Qed.
 
-(* mxvec_index, vec_mx_index *)
+(* this looks like a convenience thing ! (should not be needed !!)*)
+Lemma mulmx_coef (R : pzRingType) m n p (A : 'M[R]_(m, n)) (B : 'M[R]_(n, p))
+                    (i : 'I_m) (j : 'I_p) :
+  (A *m B)%R i j= (\sum_k  (A i k) * (B k j))%R.
+Proof. by rewrite !mxE /=. Qed.
 
+
+Section Matrix_rewrites.
+Variables (R: pzRingType).
+(* In case we have some  results that pertain to matrices TBD*)
+Locate mulmxN.
+End Matrix_rewrites.
+
+(* mxvec_index, vec_mx_index *)
 Section vec_mx_index.
 
 Variable (m n : nat).
 
+(** Variant of `mathcomp.algebra.matrix.mxvec_index` *)
 Definition vec_mx_index (i : 'I_(m * n)) : 'I_m * 'I_n :=
   enum_val (cast_ord (esym (mxvec_cast m n)) i).
+
+(* Added this definition, apparently removed from library *)
+Definition prod_curry (A B C: Type) (f: A -> B -> C)  (p: A * B)
+   := let (p1,p2) := p in f p1 p2.
 
 Lemma vec_mx_indexK i : prod_curry (mxvec_index (n:=n)) (vec_mx_index i) = i.
 Proof.
@@ -74,7 +142,7 @@ Proof. by rewrite /vec_mx_index /mxvec_index /= cast_ordK enum_rankK. Qed.
 
 End vec_mx_index.
 
-(* pointwise comparison for matrices *)
+(** Pointwise comparison for matrices *)
 
 Section lermx.
 
@@ -127,20 +195,24 @@ Qed.
 Lemma lermx_row m n1 n2 (mx1 mx1' : 'M_(m, n1)) (mx2 mx2' : 'M_(m, n2)) :
   (row_mx mx1 mx2 <=m row_mx mx1' mx2' = (mx1 <=m mx1') && (mx2 <=m mx2'))%R.
 Proof.
-apply/lermxP; case:andP.
-- by case=> /lermxP H /lermxP H0 i j; rewrite !mxE; case: splitP.
-- move=> H H0; apply: H; split; apply/lermxP => i j.
-  + by move: (H0 i (lshift n2 j)); rewrite !row_mxEl.
-  + by move: (H0 i (rshift n1 j)); rewrite !row_mxEr.
+apply/lermxP; case:andP. 
+- by case=> /lermxP H  /lermxP H0 i j; rewrite !mxE; case splitP.
+- move => H H0; apply H; split; apply/lermxP => i j.
+  + by move:(H0 i (lshift n2 j)); rewrite !row_mxEl.
+  + by move:(H0 i (rshift n1 j)); rewrite !row_mxEr.
 Qed.
+
 
 Lemma posmx_col m1 m2 n (mx1 : 'M_(m1, n)) (mx2 : 'M_(m2, n)) :
   posmx (col_mx mx1 mx2) = posmx mx1 && posmx mx2.
-Proof. by rewrite /posmx {1}/GRing.zero /= -col_mx_const lermx_col. Qed.
+Proof. 
+  by rewrite /posmx; rewrite {1 2 3}/GRing.zero /=  -col_mx_const lermx_col.
+Qed.
 
 Lemma posmx_row m n1 n2 (mx1 : 'M_(m, n1)) (mx2 : 'M_(m, n2)) :
   posmx (row_mx mx1 mx2) = posmx mx1 && posmx mx2.
 Proof. by rewrite /posmx {1}/GRing.zero /= -row_mx_const lermx_row. Qed.
+
 
 Lemma posmx_mulP m n p (mx1 : 'M_(m, n)) (mx2 : 'M_(n, p)) :
   reflect (forall i j, 0 <= (row i mx1 *m col j mx2) 0 0)%R
@@ -159,27 +231,29 @@ apply/esym/andP; case: eqP.
   by move: (H0 i j) (H1 i j); rewrite /= eq_le => ->.
 Qed.
 
+(** Monotony *)
 Lemma lermx_opp2 m n : {mono -%R%R : x y /~ (x : 'M_(m, n)) <=m y}%R.
 Proof.
-move=> mx1 mx2; apply/lermxP; case: lermxP.
-- by move=> H i j; move: (H i j); rewrite !mxE ler_opp2.
-- by move=> H H0; apply: H => i j; move: (H0 i j); rewrite !mxE ler_opp2.
+move => mx1 mx2; apply/lermxP. (* This means `apply/(lermxP (- mx1) (- mx2)`) *)
+case: lermxP.
+- by move=> H i j; move:(H i j); rewrite !mxE lerNl opprK.
+- by move=> H H0; apply H => i j; move: (H0 i j);  rewrite 2!mxE lerNl opprK.
 Qed.
 
 Lemma eq0mx_posmx m n (mx : 'M_(m, n)) :
   posmx mx && posmx (- mx)%R = (mx == 0%R).
 Proof.
-apply/andP; case: eqP.
-- by move=> ->; rewrite oppr0; split; apply/posmxP => i j; rewrite mxE.
-- move=> H [] /posmxP H0 /posmxP H1; apply: H; apply/matrixP => i j; apply/eqP.
-  by move: (H0 i j) (H1 i j); rewrite !mxE oppr_ge0 eq_le => -> ->.
+apply/andP;case:eqP.  (* the case extracts the term _ == _ from condition of if *)
+ - by move=> ->; rewrite oppr0; split; apply/posmxP => i j; rewrite mxE.
+ - move => H [] /posmxP H0 /posmxP H1. apply: H. apply/matrixP => i j; apply/eqP.
+   by move: (H0 i j) (H1 i j); rewrite !mxE oppr_ge0 eq_le => -> ->. 
 Qed.
 
 Lemma lermx_trmx m n (mx1 mx2 : 'M_(m, n)) :
   ((mx1^T <=m mx2^T) = (mx1 <=m mx2))%R.
 Proof.
-by apply/lermxP; case: lermxP;
-  [move=> H | move=> H0 H; apply: H0]; move=> i j; move: (H j i); rewrite !mxE.
+by apply/lermxP; case: lermxP; 
+  [ move=>H | move=> H0 H; apply H0]; move => i j; move:(H j i); rewrite !mxE.
 Qed.
 
 Lemma posmx_trmx m n (mx : 'M_(m, n)) : posmx mx^T = posmx mx.
@@ -188,11 +262,11 @@ Proof. by rewrite /posmx -trmx0 lermx_trmx. Qed.
 Lemma lermx_row_perm m n (p : 'S_m) (mx1 mx2 : 'M[R]_(m, n)) :
   (row_perm p mx1 <=m row_perm p mx2)%R = (mx1 <=m mx2)%R.
 Proof.
-by apply/lermxP; case: lermxP;
-  [move=> H i j; move: (H (p i) j) |
-   move=> H0 H; apply: H0 => i j; move: (H (p^-1 i) j)];
+by apply/lermxP; case:lermxP;
+  [move => H i j; move: (H (p i) j) | move => H0 H; apply H0 => i j; move:(H (p^-1 i) j)];
   rewrite !mxE ?permKV.
 Qed.
+
 
 Lemma lermx_col_perm m n (p : 'S_n) (mx1 mx2 : 'M[R]_(m, n)) :
   (col_perm p mx1 <=m col_perm p mx2)%R = (mx1 <=m mx2)%R.
@@ -276,8 +350,17 @@ Variable (P : pred 'rV[R]_n) (A : 'M[R]_(m, n)).
 Definition filter_mx : 'M[R]_(#|[pred i : 'I_m | P (row i A)]|, n) :=
   (\matrix_i row (enum_val i) A)%R.
 
+(** There is type information in [enum_val] on the RHS
+[[
+@row R #|[pred i0 |  P (@row R m n i0 A)]| n i filter_mx =
+@row R m n (@enum_val (fintype_ordinal__canonical__fintype_Finite m) 
+              [pred i0 |  P (@row R m n i0 A)] i) 
+            A
+]]
+*)
 Lemma filter_mxE1 i : row i filter_mx = row (enum_val i) A.
-Proof. by rewrite rowK. Qed.
+Proof. 
+by rewrite rowK. Qed.
 
 Lemma filter_mxE2 (i : 'I_m) (H : P (row i A)) :
   row i A = row (enum_rank_in H i) filter_mx.
@@ -295,23 +378,29 @@ Proof. by rewrite rowK; move: (enum_valP i). Qed.
 
 End filter_matrix.
 
-(* Fourier-Motzkin variable elimination for matrix inequation 0 <= A x *)
+(** ** Fourier-Motzkin variable elimination for matrix inequation 0 <= A x *)
 
 Module Fourier_Motzkin.
 Section Fourier_Motzkin.
 
 Variable (R : realFieldType) (m n : nat) (A : 'M[R]_(m, 1 + n)).
 
+(** Row vector filtering *)
 Definition P0 (r : 'rV[R]_(1 + n)) := (r 0 0 == 0)%R.
 Definition Ppos (r : 'rV[R]_(1 + n)) := (0 < r 0 0)%R.
 Definition Pneg (r : 'rV[R]_(1 + n)) := (r 0 0 < 0)%R.
 
+(** Filter matrix by row, according to sign of first element*)
 Definition subA0 := filter_mx P0 A.
 Definition subApos := filter_mx Ppos A.
 Definition subAneg := filter_mx Pneg A.
 
 Lemma subA0_0 i : (subA0 i 0 = 0)%R.
-Proof. by move/eqP: (filter_mxT (A := A) (P := P0) i); rewrite /P0 !mxE. Qed.
+Proof. 
+move/eqP: (filter_mxT (A := A) (P := P0) i). 
+    (* Interpret via eqP the assertion filter on row i*)
+by rewrite /P0 !mxE.
+Qed.
 
 Lemma subApos_pos i : (0 < subApos i 0)%R.
 Proof. by move: (filter_mxT (A := A) (P := Ppos) i); rewrite /Ppos !mxE. Qed.
@@ -319,30 +408,43 @@ Proof. by move: (filter_mxT (A := A) (P := Ppos) i); rewrite /Ppos !mxE. Qed.
 Lemma subAneg_neg i : (subAneg i 0 < 0)%R.
 Proof. by move: (filter_mxT (A := A) (P := Pneg) i); rewrite /Pneg !mxE. Qed.
 
+(** Column decomposition `[ [==0] [>0] [<0]]` *)
 Definition nf := col_mx (col_mx subA0 subApos) subAneg.
 
+(** row classification according to column `i`; uses set union / intersection *)
 Lemma rowsE : m = #|[pred i | P0 (row i A)]| +
                   #|[pred i | Ppos (row i A)]| +
                   #|[pred i | Pneg (row i A)]|.
 Proof.
-rewrite -cardUI.
+rewrite -cardUI. (* card union intersection #(A U B ) + #(A \cap B) = #A + #B *)
+                 (* cannot be both  O and > 0*)
 have/eq_card0 ->:
-    [predI [pred i | P0 (row i A)] & [pred i | Ppos (row i A)]] =i pred0
-  by move=> /= i; rewrite !inE /P0 /Ppos lt_def andbA andbN.
+    [predI [pred i | P0 (row i A)] & [pred i | Ppos (row i A)]] =i pred0; 
+    first by move=> /= i; rewrite !inE /P0 /Ppos lt_def andbA andbN.
+
+    (** Synthetize row >= 0*)
 have/eq_card ->:
     [predU [pred i | P0 (row i A)] & [pred i | Ppos (row i A)]] =i
     [pred i | 0 <= (row i A) 0 0]%R
   by move=> /= i; rewrite !inE le_eqVlt eq_sym.
 rewrite addn0 -cardUI.
+
+    (** in form of card union intersection *)
 have/eq_card0 ->:
     [predI [pred i | 0 <= row i A 0 0]%R & [pred i | Pneg (row i A)]] =i pred0
   by move=> /= i; rewrite !inE /Pneg le_lt_asym.
+
+    (** union disjoint [0<=] and [<0] *)
 have/eq_cardT ->:
     [predU [pred i | 0 <= row i A 0 0]%R & [pred i | Pneg (row i A)]] =i predT
   by move=> /= i; rewrite !inE; case: (lerP 0 (row i A 0 0))%R.
 by rewrite -cardE card_ord addn0.
 Qed.
 
+(** Use a generalized comparison tool in  mathcomp.algebra.ssrnum. Here applied to
+    row classification. 
+    Apparently these 2 definitions are used to define nf_perm. 
+    *)
 Definition nf_perm_invf (i : 'I_m) : 'I_m :=
   cast_ord (esym rowsE)
   match ltrgt0P (row i A 0 0)%R with
@@ -351,27 +453,44 @@ Definition nf_perm_invf (i : 'I_m) : 'I_m :=
   | ComparerLt0 H => rshift _ (enum_rank_in H i)
   end.
 
+
 Lemma nf_permI : injective nf_perm_invf.
 Proof.
-move=> i j /cast_ord_inj.
-by case (ltrgt0P (row i A 0 0)%R) => Hi; case (ltrgt0P (row j A 0 0)%R) => Hj;
+move=> i j /cast_ord_inj. (* split into comparison cases ; 9 cases altogether*)
+case (ltrgt0P (row i A 0 0)%R) => Hi;
+  case (ltrgt0P (row j A 0 0)%R) => Hj;
   do 2?(move/lshift_inj || move/rshift_inj);
   (apply/enum_rank_in_inj => //; exact/eqP) ||
-  move/eqP/(negP (lshift_rshift_neq _ _)) ||
-  move/eqP/(negP (rshift_lshift_neq _ _)).
-Qed.
+    move/eqP/(negP (lshift_rshift_neq _ _)) ||
+    move/eqP/(negP (rshift_lshift_neq _ _));
+    (* by now, all cases will have derived "False"*)
+  by [].
+
+Qed. 
 
 Definition nf_perm : 'S_m := (perm nf_permI)^-1.
 
+
 Lemma nf_perm_eq : row_perm nf_perm A = castmx (esym rowsE, erefl) nf.
 Proof.
-apply/(row_permI (p := perm nf_permI)); rewrite -row_permM mulgV row_perm1.
+(* move all permutations to RHS*)
+apply/(row_permI (p := perm nf_permI));  rewrite -row_permM mulgV row_perm1.
+(* consider individual coefficients (A i j) *)
 apply/matrixP => i j;
-  rewrite !mxE castmxE permE /= /nf_perm cast_ordK cast_ord_id.
+  rewrite !mxE  castmxE  permE /= /nf_perm cast_ordK cast_ord_id.
+
 by case (ltrgt0P (row i A 0 0)%R) => H /=;
   rewrite ?(col_mxEu, col_mxEd) !mxE enum_rankK_in // inE /P0 H.
 Qed.
 
+(** Now we get to the actual Fourier Motzkin step definition 
+    - the result [fm] has [n] columns since we suppressed the first
+    - number of lines: #P0 + #Pneg * #Ppos since we kept the lines where 
+      the first unknown does not appear and we insert a line for each pair
+      of a line in Pneg and one in Ppos. Expressed as a subtraction.
+      No division or pivoting required!
+      (* See https://en.wikipedia.org/wiki/Fourier–Motzkin_elimination*)
+*)
 Definition fm :
   'M[R]_(#|[pred i | P0 (row i A)]| +
          #|[pred i | Ppos (row i A)]| * #|[pred i | Pneg (row i A)]|, n) :=
@@ -380,6 +499,11 @@ Definition fm :
                      subApos i 0 *: rsubmx (row j subAneg) -
                      subAneg j 0 *: rsubmx (row i subApos))%R.
 
+(** This expresses the elimination of x0, the first unknown, which can be recovered
+    from the reduced system.
+    Recall that the system is expressed as a set of inequalities. 
+
+*)
 Lemma fmP (x : 'cV[R]_n) :
   reflect (exists x0, posmx (A *m (col_mx (const_mx x0) x)))%R
           (posmx (fm *m x))%R.
@@ -390,14 +514,20 @@ have ->: posmx (\matrix_i' (let: (i, j) := vec_mx_index i' in
                             subAneg j 0%R *: rsubmx (row i subApos)) *m x) =
          [forall i, (subAneg i.2 0 * (rsubmx (row i.1 subApos) *m x) 0 0 <=
                      subApos i.1 0 * (rsubmx (row i.2 subAneg) *m x) 0 0)%R].
+
   apply/posmx_mulP; case: forallP => /=.
   - move=> H i j; rewrite ord1 rowK {j};
       case: {i} (mxvec_indexP i) => i j; move: (H (i, j)).
-    by rewrite mxvec_indexK col_id mulmxBl (mxE addmx_key) (mxE oppmx_key)
-               subr_ge0 -!scalemxAl !(mxE scalemx_key) (H (i, j)).
+
+  by rewrite mxvec_indexK col_id mulmxBl !mxE subr_ge0 //=;
+     congr (_ <= _)%R; rewrite big_distrr =>//=; 
+     apply:congr_big =>//= ii _; rewrite !mxE mulrA.
+
   - move=> H' H; apply: H' => -[i j] /=; move: {H} (H (mxvec_index i j) 0%R).
-    by rewrite rowK mxvec_indexK col_id mulmxBl
-               mxE (mxE oppmx_key) subr_ge0 -!scalemxAl !(mxE scalemx_key).
+    by rewrite rowK mxvec_indexK col_id mulmxBl !mxE subr_ge0;
+      congr (_ <= _)%R; rewrite big_distrr =>//=;
+      apply:congr_big =>//= ii _; rewrite !mxE mulrA. 
+
 have H_A0E x0: posmx (rsubmx subA0 *m x) =
               posmx (subA0 *m col_mx (const_mx (m := 1) x0) x).
   congr posmx; apply/esym; rewrite -{1}(hsubmxK subA0) mul_row_col.
@@ -433,13 +563,34 @@ apply/(iffP andP).
               | inl i => `[b (row i subApos), +oo[%O
               | inr j => `]-oo, b (row j subAneg)]%O
             end)%R.
-    by rewrite /= itv_bigI_pairwise0;
+
+      (* This is too complicated for updating 2 or 3 obsoleted names *)
+      rewrite /= itv_bigI_pairwise0;
       apply/all_allpairsP => -[] /= i [] j _ _ //=;
-      rewrite !mulNr ler_opp2 !(mxE matrix_key _ 0%R);
-      [move: (H0 (i, j)) | move: (H0 (j, i))];
-      rewrite /= !(mulrC _ (_ 0 0)%R) ler_pdivl_mulr ?subApos_pos //
-              mulrAC ler_ndivr_mulr // ?subAneg_neg.
-    rewrite /= big_sumType /=.
+      rewrite !mulNr  //= !mxE; [move: (H0 (i, j)) | move: (H0 (j, i))];
+      rewrite /= !(mulrC _ (_ 0 0)%R) ?subApos_pos // ?subAneg_neg -!mulmx_coef.
+          
+      have ->:  (A (enum_val i) 0 = subApos i 0)%R 
+        by rewrite /subApos /Ppos /filter_mx mxE /row mxE.
+      have ->:  (A (enum_val j) 0 = subAneg j 0)%R 
+        by rewrite /subAneg /Pneg /filter_mx mxE /row mxE.
+  
+      rewrite lerNl opprI; last by apply 0%R. 
+      rewrite  ler_ndivrMr. 
+      move => HX; rewrite mulrC mulf_divA ler_pdivrMr; first by rewrite mulrC.
+      by apply:subApos_pos. 
+      by apply:subAneg_neg.
+
+  move => HX.
+  rewrite lerNl opprI; last by apply 0%R. rewrite  ler_ndivrMr.
+  rewrite mulrC mulf_divA ler_pdivrMr. 
+  by move: HX; elim i => mm ii; rewrite !mxE mulrC. 
+  by move: HX; elim j => mm jj HY; move: (subApos_pos (Ordinal jj));
+    rewrite /subApos !mxE.
+  by move: HX; elim i => mm ii HY; move: (subAneg_neg (Ordinal ii));
+    rewrite /subApos !mxE.  
+
+  rewrite /= big_sumType /=.
   case/itv_nonemptyP => /= x0; rewrite /= in_itvI !in_itv_bigI.
   case/andP=> /allP /= H1 /allP /= H2; exists x0.
   apply/andP; split; apply/posmx_mulP => i j;
@@ -447,26 +598,51 @@ apply/(iffP andP).
             2!mxE (mxE const_mx_key) (val_inj _ : lshift n 0 = 0)%R //
             ?(addrC (subAneg _ _ * _)%R) -[X in (_ + X)%R]opprK subr_ge0
             -?mulNr mulrC.
-  + rewrite -ler_pdivr_mulr ?subApos_pos //.
-    move: (H1 i); rewrite mem_index_enum in_itv andbT => /(_ erefl).
-    by congr (- _ / _ <= _)%R; rewrite !mxE.
-  + rewrite -ler_pdivl_mulr ?oppr_gt0 ?subAneg_neg // invrN mulrN -mulNr.
-    move: (H2 i); rewrite mem_index_enum in_itv => /(_ erefl).
-    by congr (_ <= - _ / _)%R; rewrite mxE.
+
+    (* Need to recover sign of vector x and scalar x0 *)
+    move: (H1 i); rewrite mem_index_enum in_itv andbT => /(_ erefl) //=.
+        rewrite ler_pdivrMr !mxE; first  by [].
+        by elim i => mm Hmm; move: (subApos_pos (Ordinal Hmm));
+          rewrite /subApos !mxE.
+        
+    move: (H2 i); rewrite mem_index_enum in_itv => /(_ erefl) //=.
+        rewrite ler_ndivlMr. rewrite  lerNl.
+        set X:= ((rsubmx (row i subAneg) *m x) 0 0)%R.
+        set Y:= ((row i subAneg) 0 0)%R.
+        rewrite GRing.mulrN.
+        congr ((- (_ * _) <= _)%R); first by rewrite /Y !mxE .
+        by elim i => mm Hmm; move: (subAneg_neg (Ordinal Hmm));
+          rewrite /subAneg !mxE.
+
 - case=> x0; rewrite {}H_decomp_ineq => /and3P [H Hpos Hneg]; split=> // {H}.
   apply/forallP => -[/= i j].
   move: (posmx_mulP _ _ Hpos i 0%R) (posmx_mulP _ _ Hneg j 0%R).
-  rewrite !col_id -{1}(hsubmxK (row i subApos)) -{1}(hsubmxK (row j subAneg))
-          !mul_row_col !(mxE addmx_key) ![(lsubmx _ *m _)%R _ _]mxE !big_ord1
-          !(mxE lsubmx_key) ![row _ _ _ _]mxE ![const_mx _ _ _]mxE
-          (_ : lshift n 0 = 0)%R; last by apply/val_inj.
+
+  rewrite !col_id -{1}(hsubmxK (row i subApos)) -{1}(hsubmxK (row j subAneg)) 
+          !mul_row_col !mxE.
+          rewrite  !big_ord1 !mxE.
+          rewrite (_ : lshift n 0 = 0)%R; last by apply/val_inj.
+
   rewrite !(addrC (_ * _)%R);
     do 2 rewrite -{1}[X in (_ + X)%R](opprK (_ * _))%R subr_ge0.
-  rewrite -(ler_nmul2l (subAneg_neg j)) -(ler_pmul2l (subApos_pos i) (- _)%R)
-          -!mulrN mulrCA; exact: le_trans.
+  rewrite -(ler_nM2l (subAneg_neg j)) -(ler_pM2l (subApos_pos i) (- _)%R)
+          -!mulrN mulrCA. 
+
+(* After conversion to ler_nM2l ler_pM2l ... conversion issues like
+     [A (enum_val i) 0%R = subApos i 0%R ] are solved by rewriting. 
+ *)
+  have ->:  forall (i : 'I_#|[pred i |  Ppos (row i A)]|),
+        subApos i 0%R = A (enum_val i) 0%R
+        by move =>ii;  rewrite  /subApos //=;
+            move/eqP: (filter_mxT (A := A) ii); rewrite /Ppos !mxE. 
+
+  have ->:  forall (i : 'I_#|[pred i |  Pneg (row i A)]|),
+        subAneg i 0%R = A (enum_val i) 0%R
+        by move =>jj;  rewrite  /subAneg //=;
+            move/eqP: (filter_mxT (A := A) jj); rewrite /Pneg !mxE. 
+  exact: le_trans.   
 Qed.
 
-End Fourier_Motzkin.
 End Fourier_Motzkin.
 
 Definition Fourier_Motzkin := Fourier_Motzkin.fm.
@@ -508,7 +684,7 @@ elim: n1 m A => [| n IHn] m A.
       congr (x _ _); apply/val_inj => /=; rewrite ord1.
 Qed.
 
-(* Farkas' lemma *)
+(** ** Farkas' lemma *)
 
 Lemma Farkas_subproof_direct
       (R : realFieldType) m n (A : 'M[R]_(m, n)) (b : 'cV_m) :
@@ -521,11 +697,12 @@ have ->: (0 = (y^T *m (A *m x)) 0 0)%R
   by rewrite mulmxA mulmx_trl H1 mulmx_trl mulmx0 !mxE.
 rewrite -subr_ge0.
 have <- : ((y^T *m (b - (A *m x))) 0 0 =
-           (y^T *m b) 0 0 - (y^T *m (A *m x)) 0 0)%R
-  by rewrite mulmxBr mxE (mxE oppmx_key).
-by rewrite mxE /=; apply: sumr_ge0 => i _; rewrite 3!mxE;
+           (y^T *m b) 0 0 - (y^T *m (A *m x)) 0 0)%R.
+  by rewrite mulmxBr 3!mxE //=.
+  by rewrite mxE /=; apply: sumr_ge0 => i _; rewrite 3!mxE;
    apply: mulr_ge0 => //; rewrite subr_ge0.
 Qed.
+
 
 Lemma Farkas_subproof_converse
       (R : realFieldType) m n (A : 'M[R]_(m, n)) (b : 'cV_m) :
@@ -533,82 +710,146 @@ Lemma Farkas_subproof_converse
   (exists x : 'cV_n, A *m x <=m b)%R.
 Proof.
 move=> H'.
-suff [x /posmxP H0]: exists x : 'cV_n,
-    posmx (row_mx A b *m (col_mx x (const_mx (n := 1) 1)))%R.
-  by exists (- x)%R; apply/lermxP => i j; move: {H0} (H0 i j);
-     rewrite ord1 mulmxN mul_row_col mxE addrC mxE /= big_ord1 mxE mulr1
-             (mxE oppmx_key) -(subr_ge0 _ (b i 0%R)) opprK.
+(* This suffices makes a matrix adding a column b to A [A b] and a 1 at end of x,
+   thereby enabling to use Fourier Motzkin for decidability  *)
+suff  [x /posmxP H0]: exists x : 'cV_n,
+    posmx (row_mx A b *m (col_mx x (const_mx (n := 1) 1)))%R
+    by exists (- x)%R; apply/lermxP => i j; move: {H0} (H0 i j);
+       rewrite ord1 mulmxN mul_row_col mxE  addrC mxE /=  big_ord1 mxE mulr1
+                mxE  -subr_ge0   mxE opprK mxE. 
+
+(**  Fourier_Motzkin used here for decidability, otherwise consider result
+    [Decidable.not_not: forall P : Prop, Decidable.decidable P -> ~ ~ P -> P].
+ *)
 apply/Fourier_Motzkin_mP/negP; move/negP/Fourier_Motzkin_mP => H; move: H'.
+
+(** It suffices to provide $0 < y$ as a row vector such that y * [A b] = [0 -1...-1 ]*)
 suff [y]: exists2 y : 'rV_m,
-    posmx y & (y *m (row_mx A b) = row_mx 0 (const_mx (-1)))%R
-  by rewrite -(posmx_trmx y) mul_mx_row => H0 /eq_row_mx [H1 H2] /(_ y^T H0)%R;
+    posmx y & (y *m (row_mx A b) = row_mx 0 (const_mx (-1)))%R.
+    by rewrite -(posmx_trmx y) mul_mx_row => H0 /eq_row_mx [H1 H2] /(_ y^T H0)%R;
      rewrite trmxK -trmx_mul H1 trmx0 H2 => /(_ erefl) /posmxP /(_ 0 0)%R;
      rewrite mxE ler0N1.
+
+(** Separates the degenerate case n == 0, and makes A the [A b] above, we will not
+    (care of / access) the value of b anymore. *)
 elim: n m {A b} (row_mx A b) H => //= [| n IHn] m A H.
-- have {}H: forall x : 'cV_0, ~ posmx (A *m col_mx x (const_mx 1%R))
+
+(** Deal with the case n == 0.... ie a super degenerate system. Why so much code ?? *)
+
+- have {}H : forall x : 'cV_0, ~ posmx (A *m col_mx x (const_mx 1%R)).
     by move=> x H0; apply: H; exists x.
-  move/negP: {H} (H 0%R);
-    rewrite -{1}(hsubmxK A) mul_row_col mulmx0 add0r negb_forall.
+    (* We just replaced H by a new hypothesis... after applying it (once and for all)*)
+  move/negP: {H} (H 0%R).
+    rewrite -{1}(hsubmxK A)  mul_row_col mulmx0 add0r negb_forall.
   case/existsP => -[] /= i j;
     rewrite ord1 {j} !mxE /= big_ord1 !mxE mulr1 -ltNge => H.
+
   have {}H: (A i 0 < 0)%R by move: H; congr (A _ _ < _)%R; apply/val_inj.
   exists ((- 1 / A i 0) *: delta_mx 0 i)%R.
   + apply/posmxP => k j; rewrite !ord1 {k} !mxE eqxx /=.
     apply: mulr_ge0; last by case: (_ == _) => //=; rewrite mulr1n ler01.
-    apply: mulr_le0; rewrite ?lerN10 // invr_le0; exact: ltW.
-  + rewrite -scalemxAl -rowE; apply/matrixP => j k; rewrite !ord1 !mxE;
+    by apply: mulr_le0; rewrite ?lerN10 // invr_le0; exact: ltW.
+  + rewrite -scalemxAl -rowE; apply/matrixP => j k; rewrite !ord1 !mxE.
       case: splitP; first by case.
-    by move=> k' _; rewrite !ord1 !mxE -mulrA mulVf ?mulr1 // ltr0_neq0.
+     by move=> k' _; rewrite !ord1 !mxE -mulrA mulVf ?mulr1 // ltr0_neq0.
+
+  (** Uses again Fourier Motzkin; things get probably more substantial here (?)
+      We introduce the column decomposition used in Fourier_Motzkin (called nf).
+      (recall ::= `[ [[==0] [>0]] [<0]]`. Lemma rowsE permits to block columns
+      accordingly )
+
+      Here A(m,n+2), row_mx0(m,n+1).... should clarify then contents. (TBD!)
+   *)
 - suff [y H0 <-]: exists2 y : 'rV__,
                     posmx y & (y *m Fourier_Motzkin.nf A =
-                               row_mx (n1 := n.+1) 0 (const_mx (-1)))%R
-    by exists (col_perm (Fourier_Motzkin.nf_perm A)^-1
+                               row_mx (n1 := n.+1) 0 (const_mx (-1)))%R; 
+      first by exists (col_perm (Fourier_Motzkin.nf_perm A)^-1
                         (castmx (erefl, esym (Fourier_Motzkin.rowsE A)) y));
       [rewrite posmx_col_perm posmx_castmx |
        rewrite mul_col_perm invgK Fourier_Motzkin.nf_perm_eq mulmx_cast].
+
+  (** Now construct the row-vector y i.e. the bulk of the Lemma. 
+      It must satisfy 0 < y and y A = [0 -1...-1] (with suitable blocking).
+   *)
+
   have {}/IHn [y H0]:
     ~(exists x : 'cV_n, posmx ((Fourier_Motzkin A) *m col_mx x (const_mx 1%R))).
     case=> x0 /Fourier_MotzkinP [x H0]; apply: H.
+
+    (* Here we stick a 'x' on top of 'x0'*)
     exists (col_mx (const_mx (m := 1) x) x0); move: H0.
     congr (posmx (_ *m _)); apply/matrixP => i j.
     by rewrite col_mxA castmxE /=; congr (col_mx _ _ _ _); apply/val_inj.
-  rewrite /Fourier_Motzkin /Fourier_Motzkin.fm /Fourier_Motzkin.nf.
+
+    (* For a large part we have an issue of row numbering (may change y0 wrt. y)
+       Following set of rewrites is interesting. Basically, this organizes (lines)
+       according to classification.
+    *)
+  rewrite /Fourier_Motzkin /Fourier_Motzkin.fm  /Fourier_Motzkin.nf.
   set subA0 := Fourier_Motzkin.subA0 A.
   set subApos := Fourier_Motzkin.subApos A.
   set subAneg := Fourier_Motzkin.subAneg A.
   set subApn := (\matrix_i' _)%R.
-  rewrite -(hsubmxK y) mul_row_col => H1.
+
+  rewrite -(hsubmxK y) mul_row_col => H1. (* split y and do a block product distinguishing 
+                                          the A0 part*)
+  (* Got a formula for y0. TBD: make it explicit*)
   exists (row_mx (row_mx (lsubmx y)
                          (((- col 0 subAneg)^T *m (vec_mx (rsubmx y))^T)))
                  ((col 0 subApos)^T *m vec_mx (rsubmx y)))%R.
+
+    (* Deal with the positivity constraint, after analyzing by blocks*)
     move: H0; rewrite -{1}(hsubmxK y) posmx_row => /andP [H0 H0'];
-      rewrite !posmx_row H0 /=; apply/andP; split; apply: posmx_mul;
+      rewrite !posmx_row H0 /=; apply/andP; split; apply: posmx_mul;     
       rewrite ?posmx_trmx ?posmx_vec_mx //; apply/posmxP => i j;
-      rewrite ?(mxE oppmx_key) mxE ?oppr_ge0; apply: ltW;
-      [apply: Fourier_Motzkin.subAneg_neg | apply: Fourier_Motzkin.subApos_pos].
+      rewrite ?(mxE oppmx_key) mxE ?oppr_ge0; apply: ltW; 
+        last apply:Fourier_Motzkin.subApos_pos.
+        rewrite /subAneg  mxE; apply: @Fourier_Motzkin.subAneg_neg _ _ _ A i.
+
+  (* prepare an ad-hoc rewrite rule to restructure (y ? see below)*)
   have ->: row_mx (R := R) (n1 := n.+1) (m := 1) 0 (const_mx (-1)%R) =
            row_mx (n1 := 1) (n2 := n + 1) 0 (row_mx 0 (const_mx (-1)%R))
-    by apply/matrixP => i j; rewrite row_mxA castmxE; congr (row_mx _ _ _ _);
-      rewrite ?row_mx0 //; apply/val_inj.
-  rewrite -{}H1 !mul_row_col -(hsubmxK (_ + _ + _)%R);
+    by apply/matrixP => i j;  rewrite row_mxA castmxE; congr (row_mx _ _ _ _);
+      rewrite ?row_mx0 //;  apply/val_inj. 
+  rewrite -{}H1 !mul_row_col -(hsubmxK (_ + _ + _)%R).
     congr row_mx; apply/matrixP => i j.
-  + rewrite !ord1 3!mxE {i j} lshift0 mulmx_row_col.
+  + rewrite !ord1  3!mxE {i j} lshift0  mulmx_row_col. 
+
+    (* use subA0 characterization ...*)
     have ->: col 0%R subA0 = 0%R
       by apply/matrixP => i j; rewrite mxE Fourier_Motzkin.subA0_0 mxE.
+
     by rewrite mulmx0 mxE add0r mulmx_row_col row_id -trmx_mul mulmx_trl
                mulmxA mulmxN 2!mxE addrC mulmx_row_col row_id subrr.
-  + rewrite (mxE rsubmx_key) !(mxE addmx_key)
-            !(mulmx_row_col (lsubmx y)) -addrA;
-      congr ((_ *m _) _ _ + _)%R; first by apply/matrixP => k l; rewrite !mxE.
-    rewrite !(mulmx_row_col _ _ i (rshift 1 j)) !row_id -trmx_mul mulmx_trl
-            mxE mulmxA mulmxN addrC -(trmxK (col _ subAneg))
-            -(trmxK (col 0%R subAneg)) -!mxvec_dotmul !trmxK vec_mxK.
-    have ->: forall (mx1 mx2 : 'M[R]_1), (mx1 0 0 + mx2 0 0 = (mx1 + mx2) 0 0)%R
-      by move=> mx1 mx2; rewrite !mxE.
-    rewrite -mulmxBl mulmx_trr mxE (mulmx_row_col _ _ i j) row_id.
-    by congr ((_ *m _) _ _)%R; apply/matrixP => k l; rewrite !ord1 {i l} !mxE;
-      case: {k} (mxvec_indexP k) => k l;
-      rewrite !mxvecE mxvec_indexK !mxE !big_ord1 !mxE (mulrC _ (A _ 0%R)).
+
+    rewrite  2!mxE mulmx_row_col mxE  -addrA !ord1 
+            -{1}(hsubmxK subA0) {1}mul_mx_row row_mxEr -/j //=.
+    
+    set L1:= (X in (X + (_ + _))%R ) .
+    set R1:= (lsubmx y *m rsubmx subA0)%R.
+    have ->: L1 = R1 i j by rewrite /L1 /R1 ord1.
+    rewrite addmxE; congr ((_+_)%R); first by rewrite ord1.
+    
+    
+    rewrite /subApn. 
+    rewrite mulmx_row_col. (* repeat gets too time consuming *)
+    rewrite !row_id -trmx_mul mulmx_trl mxE mulmxA mulmxN addrC  
+      -(trmxK (col _ subAneg)) -(trmxK (col 0%R subAneg)) -!mxvec_dotmul !trmxK vec_mxK.
+    rewrite -addmxE -mulmxBl mulmx_trr mxE mulmx_row_col row_id.
+    rewrite (* -/subApn*) !col_id.
+
+    rewrite /matrixP -!/i.
+    rewrite mulmx_row_col [X in _ = X]mulmx_row_col.
+    rewrite -/i -(ord1 i) !row_id.  
+    set ZZ:= (rsubmx y). (* row vector # (Ppos (row 0 A)) * (Pneg (row 0 A)) 
+                            BTW: posmx y i.e. 0 <= y *)
+
+
+    by congr ((_ *m _) _ _ )%R;   (* we have little info on y *)
+    apply/matrixP => k l;         (* Elementwise equality*)
+    rewrite !ord1 {i l} !mxE;
+    case: {k} (mxvec_indexP k) => k l;
+    rewrite !mxvecE mxvec_indexK !mxE !big_ord1 !mxE (mulrC _ (A _ 0%R)).
 Qed.
 
 Lemma Farkas_subproof
@@ -618,6 +859,7 @@ Lemma Farkas_subproof
 Proof.
 split; [exact: Farkas_subproof_converse | exact: Farkas_subproof_direct].
 Qed.
+
 
 Lemma Farkas (R : realFieldType) m n (A : 'M[R]_(m, n)) (b : 'cV_m) :
   (forall y : 'cV_m, posmx (y^T *m A) -> posmx (y^T *m b))%R <->
@@ -636,3 +878,4 @@ by rewrite -andbA !linearN /= !mulNmx trmx1 mul1mx mulmx0 addr0
   => /and3P [H0 H1 H2] /eqP; rewrite subr_eq0 => /eqP H3; subst w; move: H2;
   rewrite -mulmxBl -mulmxBr -!linearN -linearD /= mulmx_trl posmx_trmx => /H.
 Qed.
+End  Fourier_Motzkin.

@@ -1,14 +1,37 @@
 From mathcomp Require Import all_ssreflect all_fingroup all_algebra zmodp.
-Require Import utils bigop_ext matrix_ext.
+
 Import GroupScope Order.TTheory GRing.Theory Num.Theory.
+
+Require Import utils bigop_ext matrix_ext.
+Import Fourier_Motzkin.
+
+
+Set Implicit Arguments.
+Unset Strict Implicit.
+Unset Printing Implicit Defensive.
+
+(******************************************************************************)
+(*  Convenience                                                               *)
+(******************************************************************************)
+Section Order.
+Local Open Scope order_scope.
+
+Variable (R : numDomainType).
+
+Lemma ltler  (x y : R): (x <= y) = (x == y)  || (x < y).
+Proof. by rewrite le_eqVlt eq_sym. Qed.
+
+Lemma ltler_I (x y:R): (x < y) -> (x <=y ).
+Proof. by  rewrite le_eqVlt => H; apply/orP; right. Qed.
+
+
+End Order.
 
 (******************************************************************************)
 (*  Convex cones                                                              *)
 (******************************************************************************)
 
-Set Implicit Arguments.
-Unset Strict Implicit.
-Unset Printing Implicit Defensive.
+
 
 Section ConeDef.
 
@@ -107,8 +130,8 @@ have H i: (0 <= (x - x') i 0 * y i 0 -
                 (x^T *m y) 0 0 / frac * `|y i 0|)%R.
   move/(_ i): H0; rewrite ltr_norml mulNr opprK => /andP [] H H0.
   rewrite subr_ge0 -{1}(subr0 (y _ _)); case: (lerP 0 (y i 0))%R => H2;
-    [ rewrite subr0 ler_wpmul2r // |
-      rewrite sub0r mulrN -mulNr ler_wnmul2r //]; exact: ltW.
+    [ rewrite subr0 ler_wpM2r // |
+      rewrite sub0r mulrN -mulNr ler_wnM2r //]; exact: ltW.
 rewrite lt_def; apply/andP; split; last exact: sumr_ge0.
 move/lt0r_neq0: Hfrac; rewrite !psumr_eq0 => // /allPn /= [i H2];
   rewrite normr_eq0 => H3.
@@ -118,7 +141,7 @@ rewrite -{2}(subr0 (y _ _)); case: (lerP 0 (y i 0%R)) => H2.
 - by rewrite subr0 => /(mulIf H3); apply/eqP; rewrite neq_lt H orbT.
 - by rewrite sub0r mulrN -mulNr => /(mulIf H3); apply/eqP; rewrite neq_lt H0.
 Qed.
-
+ 
 Lemma dual_coneK C : poly_cone C -> forall x, C x <-> dual_cone (dual_cone C) x.
 Proof.
 move=> [n normal Hpoly] x; split;
@@ -137,11 +160,14 @@ case=> basis_num basis axiom; constructor.
     [apply/allP |]; move=> /= k _; rewrite mxE mulr0.
 - move=> x y /axiom [cx /posmxP Hx ->] /axiom [cy /posmxP Hy ->].
   apply/axiom; exists (cx + cy)%R; last by rewrite mulmxDr.
-  apply/posmxP => i j; rewrite mxE; exact: ler_paddl.
+  apply/posmxP => i j; rewrite mxE; 
+  move: (Hx i j) (Hy i j); exact: addr_ge0.
+
 - move=> /= a x H /axiom [c /posmxP Hc ->].
   apply/axiom; exists (a *: c)%R; last by rewrite scalemxAr.
   apply/posmxP => i j; rewrite mxE; exact: mulr_ge0.
 Qed.
+
 
 (* duality *)
 

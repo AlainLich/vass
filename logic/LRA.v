@@ -1,6 +1,8 @@
+From HB Require Import structures.
 From mathcomp Require Import all_ssreflect all_fingroup all_algebra zmodp.
 Import GroupScope Order.TTheory GRing.Theory Num.Theory.
-Require Import utils algebra_ext matrix_ext.
+Require Import utils. 
+From vass Require Import algebra_ext matrix_ext.
 
 (******************************************************************************)
 (*  Linear rational arithmetic and Fourier-Motzkin variable elimination       *)
@@ -14,6 +16,13 @@ Section LRA.
 
 Variable (R : realFieldType).
 
+(*TBD: move to library 
+  Probable coercion Order.type -> R:RealFieldType*)
+Lemma ltr_asym : forall (x y:R), false = (x < y < x)%R.
+Proof.
+by move => x y; rewrite lt_asym.
+Qed.
+
 Section QFLRA.
 
 Variable (dim : nat).
@@ -22,8 +31,10 @@ Inductive QFLRA_formula :=
   | QFLRA_neg   of QFLRA_formula
   | QFLRA_and   of QFLRA_formula & QFLRA_formula
   | QFLRA_or    of QFLRA_formula & QFLRA_formula
-  | QFLRA_leq   of 'cV[R]_dim.
+  | QFLRA_leq   of 'cV[R]_dim. (*  QFLRA_leq : forall _ : matrix R dim 1, QFLRA_formula. *)
 
+
+(* Equal formulas need to be formally equal (no meaning on operators )*)
 Fixpoint eq_QFLRA_formula (f1 f2 : QFLRA_formula) :=
   match f1, f2 with
     | QFLRA_neg f1', QFLRA_neg f2' => eq_QFLRA_formula f1' f2'
@@ -45,9 +56,7 @@ move=> f1 f2; apply/(iffP idP) => [| <-].
 - by elim: f1 => //= [f1l -> | f1l ->] *; rewrite ?eqxx.
 Defined.
 
-Canonical QFLRA_formula_eqMixin := EqMixin eq_QFLRA_formulaP.
-Canonical QFLRA_formula_eqType :=
-  Eval hnf in EqType QFLRA_formula QFLRA_formula_eqMixin.
+HB.instance Definition _ := @hasDecEq.Build _ _ eq_QFLRA_formulaP .
 
 End QFLRA.
 
@@ -58,32 +67,65 @@ Inductive LRA_formula (dim : nat) :=
   | LRA_and     of LRA_formula dim & LRA_formula dim
   | LRA_or      of LRA_formula dim & LRA_formula dim
   | LRA_imply   of LRA_formula dim & LRA_formula dim
-  | LRA_leq     of 'cV[R]_dim.
+  | LRA_leq     of 'cV[R]_dim. (*  LRA_leq : forall _ : matrix R dim 1, LRA_formula. *)
 
-Definition LRA_literal dim := [eqType of bool * 'cV[R]_dim].
 
+(* Uses pair_eqP in eqtype.v circa line 812 section ProdEqType *)
+Fact LRA_literal_eqP dim :  @Equality.axiom (bool * 'cV[R]_dim)%type pair_eq.
+Proof. apply pair_eqP. Qed.
+
+Section LRA_again.
+
+Variable (dim:nat).
+
+(* This does not bring anything new ... but is OK for HB *)
+HB.instance Definition _ := @hasDecEq.Build _ _  (@LRA_literal_eqP dim ).
+
+End LRA_again.
+
+Definition LRA_literal dim:= (bool * 'cV[R]_dim)%type.
+
+(* Here we extract the scalar from a 1x1 'scalar produc' matrix *)
 Definition LRA_interpret_af dim (I f : 'cV[R]_dim) := ((f^T *m I) 0 0)%R.
 
+
+(* Check the role of the boolean first arg ? specify exact/with some margin comparison 
+   Arises first in  NF_neg_CNF below!
+? *)
 Definition LRA_interpret_literal dim (I : 'cV_dim) (f : LRA_literal dim) :=
   (0%R < LRA_interpret_af I f.2 ?<= if f.1)%O.
 
+(* Recursion on interpretation of LRA formula *)
 Lemma LRA_af_recl dim (I f : 'cV_(1 + dim)) :
   LRA_interpret_af I f =
   (f 0 0 * I 0 0 + LRA_interpret_af (dsubmx I) (dsubmx f))%R.
 Proof.
-by rewrite /LRA_interpret_af -{1}(hsubmxK f^T) -{1}(vsubmxK I) mul_row_col
-           2!mxE big_ord_recl big_ord0 3!mxE addr0 lshift0 trmx_dsub.
+(* This is the blow by blow account ...*)
+rewrite /LRA_interpret_af -{1}(hsubmxK f^T) -{1}(vsubmxK I) .
+rewrite mul_row_col. (* product by blocks*)
+rewrite  2!mxE.      (* reduce to computation of single element (0,0) by summation on row/col*)
+rewrite big_ord_recl. (* extract first elt and recurse on sum*)
+rewrite big_ord0. (* sum on empty *)
+rewrite 3!mxE addr0 lshift0.
+rewrite trmx_dsub. (* deal with transposition (dsubmx f)^T  -> rsubmx f^T *)
+exact: Logic.eq_refl.
 Qed.
 
 Lemma LRA_interpret_af_add dim (I f1 f2 : 'cV_dim) :
   (LRA_interpret_af I (f1 + f2) =
    LRA_interpret_af I f1 + LRA_interpret_af I f2)%R.
-Proof. by rewrite /LRA_interpret_af linearD mulmxDl mxE. Qed.
+Proof.
+ by rewrite /LRA_interpret_af;
+ rewrite linearD; (* transpose linearity *)
+ rewrite mulmxDl;  (* matrix mul distributes ... again linearity*)
+ rewrite mxE //=.
+ Qed.
 
 Lemma LRA_interpret_af_opp dim (I f : 'cV_dim) :
   (LRA_interpret_af I (- f) = - LRA_interpret_af I f)%R.
 Proof. by rewrite /LRA_interpret_af linearN mulNmx mxE. Qed.
 
+(* Interpretation (recursive) as Prop of the logic *)
 Fixpoint LRA_interpret_formula'
   dim (f : LRA_formula dim) : 'cV[R]_dim -> Prop :=
   match f with
@@ -103,6 +145,7 @@ Fixpoint LRA_interpret_formula'
 
 Notation LRA_interpret_formula I f := (@LRA_interpret_formula' _ f I).
 
+(* Interpretation of expressions *)
 Fixpoint QFLRA_interpret_formula
   dim (I : 'cV_dim) (f : QFLRA_formula dim) : bool :=
   match f with
@@ -114,31 +157,36 @@ Fixpoint QFLRA_interpret_formula
     | QFLRA_leq t       => (0 <= (t^T *m I) 0 0)%R
   end.
 
+(* Top in lattice *)
 Definition QFLRA_top dim : QFLRA_formula dim := QFLRA_leq 0%R.
 Arguments QFLRA_top {dim}.
 
+(* Semantic interpretation of Top *)
 Lemma QFLRA_top_true dim (I : 'cV_dim) : QFLRA_interpret_formula I QFLRA_top.
 Proof. by rewrite /= trmx0 mul0mx mxE. Qed.
 
+(* Bottom in lattice *)
 Definition QFLRA_bot dim : QFLRA_formula dim := QFLRA_neg QFLRA_top.
 Arguments QFLRA_bot {dim}.
 
 Lemma QFLRA_bot_false dim (I : 'cV_dim) :
   QFLRA_interpret_formula I QFLRA_bot = false.
-Proof. by move: (QFLRA_top_true I) => /= ->. Qed.
+Proof. by move: (QFLRA_top_true I) =>/=  ->. Qed.
 
 Definition NF_neg dim (fss : seq (seq (LRA_literal dim))) :=
   [seq [seq (negb f.1, - f.2)%R | f : LRA_literal dim <- fs] |
    fs <- fss].
 
+(** Negation and quantifiers; Here lss : seq (seq (LRA_literal dim))                              *)
 Lemma NF_neg_CNF dim (I : 'cV_dim) lss :
   has (all (LRA_interpret_literal I)) (NF_neg lss) =
   ~~ all (has (LRA_interpret_literal I)) lss.
 Proof.
 rewrite /NF_neg /LRA_interpret_literal -has_predC has_map.
 apply/eq_in_has => /= afs _; rewrite -all_predC all_map.
-apply/eq_in_all => -[f t] _ /=; rewrite lteifNE -lteif_opp2 oppr0.
-by congr (~~ (_ < _ ?<= if _)%O); rewrite /LRA_interpret_af linearN mulNmx mxE.
+apply/eq_in_all => -[f t] _ /= ; rewrite lteifNE //=.
+by rewrite LRA_interpret_af_opp //=; case: f =>//=; congr (~~ _); 
+  [rewrite oppr_le0 | rewrite oppr_lt0].
 Qed.
 
 Lemma NF_neg_DNF dim (I : 'cV_dim) lss :
@@ -147,8 +195,8 @@ Lemma NF_neg_DNF dim (I : 'cV_dim) lss :
 Proof.
 rewrite /NF_neg /LRA_interpret_literal -all_predC all_map.
 apply/eq_in_all => /= afs _; rewrite -has_predC has_map.
-apply/eq_in_has => -[f t] _ /=; rewrite lteifNE -lteif_opp2 oppr0.
-by congr (~~ (_ < _ ?<= if _)%O); rewrite /LRA_interpret_af linearN mulNmx mxE.
+apply/eq_in_has => -[f t] _ /=; rewrite lteifNE /LRA_interpret_af //= linearN mulNmx mxE.
+congr (~~ _); case: f => //=; by [rewrite oppr_le0 | rewrite oppr_lt0].
 Qed.
 
 Fixpoint
@@ -204,7 +252,7 @@ Lemma QFLRA_l2f_correctness dim (I : 'cV_dim) (l : LRA_literal dim) :
 Proof.
 rewrite /QFLRA_l2f /LRA_interpret_literal; case: l.1 => //=.
 rewrite -ltNge -subr_lt0 sub0r; congr (_ < _)%R.
-by rewrite /LRA_interpret_af linearN mulNmx (mxE oppmx_key).
+rewrite /LRA_interpret_af  linearN mulNmx !mxE =>//=.
 Qed.
 
 Definition QFLRA_unDNF dim (lss : seq (seq (LRA_literal dim))) :=
@@ -249,16 +297,55 @@ Definition literal_interval dim (I : 'cV_dim) (l : LRA_literal (1 + dim)) :=
   else if (0 < l.2 0 0)%R then Interval (BSide l.1 r) (BInfty _ false)
                           else Interval (BInfty _ true) (BSide (~~ l.1) r).
 
+
+
+
 Lemma literal_intervalE dim x0 (I : 'cV_dim) (l : LRA_literal (1 + dim)) :
   LRA_interpret_literal (col_mx (const_mx x0) I) l =
   (x0 \in literal_interval I l).
 Proof.
 rewrite /literal_interval /LRA_interpret_literal LRA_af_recl.
 rewrite /LRA_interpret_af trmx_dsub mxE split1 unlift_none /= mxE col_mxKd.
-case: (ltrgtP (l.2 0 0) 0)%R => /= H;
-  try by rewrite in_itv /= (negbK, andbT) addrC addr_lteif0r
-                 (lteif_ndivl_mulr, lteif_pdivr_mulr) // mulrC.
-by rewrite H mul0r add0r; case: Order.lteif; rewrite // in_itv lt_asym.
+case: (ltrgtP (l.2 0 0) 0)%R => /= H.
+
+(* Much longer than the original which I could not get to work; probable reason
+   the 'try' above was rejected and did not prepare for the sequel!  *)                 
+
+- elim: l H =>/= [a] bV HbVNeg.
+  set xmat:=  ((rsubmx  bV^T *m I) 0 0) %R .
+  rewrite // in_itv Bool.andb_true_l Bool.negb_involutive.
+
+  +  case: a => //=.
+    * rewrite -lerBlDr sub0r; rewrite ler_ndivlMr; last  by apply HbVNeg.
+      by rewrite {1}mulrC.
+    * set nbV0:= (- (bV 0 0))%R.
+      have NbV: ((bV 0 0) = -nbV0)%R by rewrite /nbV0 opprK.
+      rewrite NbV. rewrite ltr_ndivlMr; first by rewrite -ltrBlDr  sub0r {1}mulrC.
+      by rewrite /nbV0 opprK; exact HbVNeg.
+
+- elim: l H =>/= [a] bV HbVPos.
+  set xmat:=  ((rsubmx  bV^T *m I) 0 0) %R .
+  +  case: a => //=; 
+      first by rewrite -lerBlDr sub0r  in_itv Bool.andb_true_r mulrC //=; rewrite ler_pdivrMr.
+      rewrite in_itv /= Bool.andb_true_r ltr_pdivrMr; last by exact HbVPos.
+      by rewrite -ltrBlDr sub0r mulrC.
+
+
+ -  elim: l H =>/= [a] bV bvZ.
+    set xmat:= ((rsubmx bV^T *m I) 0 0)%R.
+    +  case: a => //=; case Hmat: (0 <= xmat)%R =>/=.
+       * by rewrite in_itv bvZ mul0r add0r /xmat =>//=.
+       * by rewrite bvZ mul0r add0r Hmat in_itv  lt_asym.
+       * rewrite bvZ mul0r add0r.
+       have := le0r xmat; rewrite Hmat => H1; symmetry in H1.
+       elim: (Bool.orb_prop _ _ H1 )=> H2'.
+       replace (0 < xmat)%R with false.
+          by rewrite in_itv -ltr_asym.
+          by rewrite (eqP H2') ltxx.
+        by rewrite H2' in_itv => //=.
+    +  case H1: (0 < xmat)%R.
+        * by rewrite in_itv //= bvZ mul0r add0r.
+        * by rewrite in_itv //= bvZ mul0r add0r H1  -ltr_asym.
 Qed.
 
 Lemma exists_conj_elimP dim I (ls : seq (LRA_literal (1 + dim))) :
@@ -271,9 +358,10 @@ have af_decomp (l1 l2 : LRA_literal (1 + dim)) :
     (l1.2 0 0 *: dsubmx l2.2 - l2.2 0 0 *: dsubmx l1.2)%R =
   (l1.2 0 0 * LRA_interpret_af I (dsubmx l2.2) -
    l2.2 0 0 * LRA_interpret_af I (dsubmx l1.2))%R.
-  by rewrite /LRA_interpret_af mulmx_trl mulmxBr -!scalemxAr
-             2!mxE (mxE oppmx_key);
-    congr (_ - _)%R; rewrite mulmx_trl !mxE.
+
+  by rewrite /LRA_interpret_af  mulmx_trl mulmxBr -!scalemxAr 3!mxE;
+    congr (_ + _)%R; rewrite mulmx_trl !mxE.
+
 apply/(iffP idP); rewrite /exists_conj_elim all_cat.
 - case/andP; rewrite all_map => H /all_allpairsP H0.
   suff: itv_nonempty
@@ -294,13 +382,15 @@ apply/(iffP idP); rewrite /exists_conj_elim all_cat.
     do !case: ifP => //=; move=> H6 H7; try rewrite -negb_and negbK.
   + have {H5 H6} {}H4: (l2.2 0 0 < 0)%R by rewrite ltNge le_eqVlt eq_sym H5 H6.
     move: (H0 l1 l2).
+
+
     by rewrite negbK !mem_filter H2 H3 H4 H7 /LRA_interpret_literal /=
-               lteif_pdivr_mulr // mulrAC lteif_ndivl_mulr // !mulNr
+               lteif_pdivrMr // mulrAC lteif_ndivlMr // !mulNr
                -addr_lteif0r af_decomp !(mulrC (LRA_interpret_af _ _))%R => ->.
   + have {H5 H7} {}H4: (l1.2 0 0 < 0)%R by rewrite ltNge le_eqVlt eq_sym H4 H7.
     move: (H0 l2 l1).
     by rewrite negbK !mem_filter H2 H3 H4 H6 /LRA_interpret_literal /=
-               lteif_pdivr_mulr // mulrAC lteif_ndivl_mulr // !mulNr
+               lteif_pdivrMr // mulrAC lteif_ndivlMr // !mulNr
                -addr_lteif0r af_decomp !(mulrC (LRA_interpret_af _ _))%R => ->.
 - case=> x H; apply/andP; split.
   + rewrite all_map; apply/allP => /= l; rewrite mem_filter =>
@@ -313,9 +403,10 @@ apply/(iffP idP); rewrite /exists_conj_elim all_cat.
     move: H0 H2 H1 H3.
     rewrite /LRA_interpret_literal /= !LRA_af_recl !mxE;
       case: splitP => i // _; rewrite ord1 !addr_lteif0r af_decomp subr_lteif0r.
-    move=> /(lteif_pmul2l l2.1) <- /(lteif_nmul2l l1.1) <-.
+    move=> /(lteif_pM2l l2.1) <- /(lteif_nM2l l1.1) <-.
     rewrite !mulrN mulrCA col_mxKd !mxE; exact: lteif_trans.
 Qed.
+
 
 Definition exists_DNF_elim dim (lss : seq (seq (LRA_literal dim.+1))) :
   QFLRA_formula dim :=
@@ -332,6 +423,8 @@ rewrite /exists_DNF_elim -QFLRA_unDNF_correctness; apply/(iffP hasP).
 - case=> x /hasP [] ls H H0; exists (exists_conj_elim ls); first exact: map_f.
   by apply/exists_conj_elimP; exists x.
 Qed.
+
+
 
 Fixpoint Fourier_Motzkin dim (f : LRA_formula dim) : QFLRA_formula dim :=
   match f with

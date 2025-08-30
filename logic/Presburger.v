@@ -1,16 +1,311 @@
+From HB Require Import structures.
 From mathcomp Require Import all_ssreflect all_fingroup all_algebra zmodp.
 Require Import utils algebra_ext bigop_ext matrix_ext.
-Import GroupScope Order.TTheory GRing.Theory Num.Theory.
+Import GroupScope Order.TTheory GRing.Theory Num.Theory GRing.Zmodule  Num.NumDomain.
 
 (******************************************************************************)
-(*  Presburger arithmetic                                                     *)
+(** * Presburger arithmetic                                                     *)
 (******************************************************************************)
 
 Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
-(* Quantifier free Presburger formula and negation free normal forms *)
+(******************************************************************************)
+(** ** convenience.                                                               *)
+(******************************************************************************)
+Section Bool_convenience.
+
+Fact orb_true_true:forall a b, b == true -> a||b.
+Proof. by move => a b H; rewrite (eqP H); exact: orbT. Qed.
+
+End Bool_convenience.
+
+Section Nat_convenience.
+
+Lemma   eq_orgt0: forall n:nat, (n == 0) || (0 < n).
+Proof. by case. Qed.
+
+End Nat_convenience.
+
+Section Nat_Z_convenience.
+
+Fact divnzN (x:nat) (y:int): 
+          eq (divz (Posz x) (Num.norm y))
+             (Posz (divn x (absz y))).
+Proof.
+case: y => // y; rewrite /divz // -abszE !absz_nat//;
+   first by case Hpy: y => //=;  rewrite /sgz //= mul1r.
+by rewrite /sgz //= mul1r. 
+Qed.
+
+End Nat_Z_convenience.
+
+(* TBD: already in cone.v MOVE IN COMMON PLACE*)
+Section Order.
+Local Open Scope order_scope.
+Local Open Scope ring_scope.
+
+Variable (R : numDomainType).
+
+Lemma ltler  (x y : R): (x <= y) = (x == y)  || (x < y).
+Proof. by rewrite le_eqVlt eq_sym. Qed.
+
+Lemma ltler_I (x y:R): (x < y) -> (x <=y ).
+Proof. by  rewrite le_eqVlt => H; apply/orP; right. Qed.
+
+(** Really, just repackagings of lerD2r/lerD2r monotony lemma
+    Note: many more results in algebra.ssrnum and algebra.ssralg
+*)
+Lemma addger (x y z :R): (x <= y) = ( x + z <= y + z ).
+Proof. by rewrite lerD2r.
+Qed.
+
+Lemma subger (x y z :R): (x <= y) = ( x - z <= y - z ).
+Proof. by rewrite lerD2r.
+Qed.
+
+Lemma lerXoppl (x y :R): (x <= y) = ( 0 <= - x + y ).
+Proof.
+ by rewrite -(addNr x)  addrC [X in (_ = (_ <= X))]addrC lerD2r.
+Qed.
+
+Lemma lerXoppr (x y :R): (x <= y) = ( 0 <= y - x ).
+Proof.
+ by rewrite (subger _ _ x) addrC addNr. 
+Qed.
+
+Lemma mulger {r y z :R}: (0 < r) ->   (y <= z)  = (y * r <= z * r ).
+Proof.
+move =>H; apply: Logic.eq_sym (ler_pM2r H y z). 
+Qed.
+
+Lemma mulgel {r y z :R}: (0 < r) ->   (y <= z)%R  = ( r * y  <= r * z  ).
+Proof.
+ by move =>H; rewrite 2!mulrC (mulger H) mulrC; replace (z * r)%R with (r * z)%R;
+  last by apply:mulrC. 
+Qed.
+
+
+Lemma mulwger (r y z :R): (0 <= r) 
+        ->( (y <= z) || (r == 0) = ((r * y)  <= (r * z) )).
+Proof. 
+move => H; rewrite ltler in H; case/orP : H => H; 
+      first by  rewrite -(eqP H) !mul0r [X in _ = X]ltler  eq_refl Bool.orb_true_r.
+      rewrite orbC; rewrite (mulger (r:=r) H)  mulrC;
+       replace (z * r)%R with (r * z)%R; last by apply:mulrC.
+       rewrite (negPf (lt0r_neq0 H)) //= .
+Qed.
+
+(* missing or not found ?*)
+Lemma ltz_abs : forall  (x:R), x < 0 -> 0 < `|x|%R. 
+Proof.
+move => x; move/ltr0_neq0 => H. 
+have :=(normr_ge0 x); rewrite (le0r `|x|%R) normr_eq0.
+by case H': (x == 0) =>//=; rewrite H' in H. 
+Qed.
+
+
+(* Facilitate use of intervals *)
+Lemma itv_sepr: forall (a b x: R), a <= x <= b -> 0 <= x - a <= b - a.
+Proof.
+move => a b x H.
+elim : (andP H) => H1 H2.
+by apply/andP; split; [rewrite -lerXoppr | rewrite -subger].
+Qed.
+
+Lemma itv_sepl: forall (a b x: R), a <= x <= b -> 0 <= b - x  <= b - a.
+Proof.
+move => a b x H.
+elim : (andP H) => H1 H2.
+apply/andP; split.
+  by rewrite -lerXoppr.
+  rewrite lerBlDl addrC -(subrKA 0) add0r oppr0 addr0 -addrA 
+          -{1}(add0r b) [X in (_ <= X )%R]addrC -addger
+          -lerBlDl opprI; last by  apply: a. by rewrite  add0r.
+Qed.
+
+End Order.
+
+
+(******************************************************************************)
+(** **  Z Module convenience.                                                          *)
+(******************************************************************************)
+Section Z_Modules.
+
+
+Variables (R : zmodType).
+Implicit Types x y : R.
+
+(** Functionality (must exist somewhere !!)*)
+Fact add_eval z x y: (x = y -> (z + x = z + y)%R).
+Proof.
+  by move=> H; rewrite H.
+Qed.
+
+Fact func_eval (f: R -> R) (x y: R): (x = y ) -> ( f x = f y).
+Proof.
+  by move=> H; rewrite H.
+Qed.
+
+(** Use of morphism, and iteration.
+*)
+Fact oppM:  morphism_2 (fun x => GRing.opp x) (fun x y => GRing.add x y)
+                (fun x y => GRing.add x y).
+Proof. by apply opprD. Qed.
+
+Fact oppM3 x y z: (- (x + y + z))%R = (- x -y - z)%R.
+Proof.
+by rewrite 2!oppM.
+Qed.
+
+Fact oppM4 w x y z: (- (w + x + y + z))%R = (- w - x -y - z)%R.
+Proof.
+by rewrite 3!oppM.
+Qed.
+
+(** Facilitate use of divisibility criterion *)
+Fact modz_dvd: forall m d, (d %| m = (m %% d == 0))%Z.
+Proof.
+move => m d. 
+by rewrite (sameP dvdz_mod0P eqP).
+Qed.
+
+
+(** Following are a series of expression trees in which +/- simplification
+    is sought.
+    Numerous possible cases with opp and positionning in expression tree *)
+Fact addr_opp2: forall x y z, (x - y + z)%R = (x + (z - y))%R.
+Proof.
+by move => x y z; rewrite -addrA  -GRing.opprB //=; 
+  congr (GRing.add _ _); rewrite opprB addrC.
+Qed.
+
+Fact addr_opp2b: forall x y, (-x + y + x)%R = y.
+Proof.
+by move => x y; rewrite addrC addrA addrN add0r.  
+Qed.
+
+Fact addr_opp2c: forall x y, (x + y - y)%R = x.
+Proof.
+by move => x y; rewrite -addrA addrN  addr0.  
+Qed.
+
+Fact addr_opp2d: forall x y, ( - x + y - y)%R = (- x)%R.
+Proof. by move => x y; apply addr_opp2c.
+Qed.
+
+Fact addr_opp2e: forall x y, (x + y - x)%R = y.
+Proof.
+ by move => x y; have := addr_opp2b (-x)%R; rewrite opprK => ->. 
+Qed.
+
+(** "Simplification rules, facilitate handling awkward expr. trees"*)
+
+Fact addrK_N1 [V : zmodType] (x y : V): (- x + y + x)%R  = y .
+Proof.
+by rewrite -addrA addrC -addrA addrN addr0.
+Qed.
+
+Fact addrK_N2 z x y : (- x + y - z + x)%R  = (y - z)%R .
+Proof.
+rewrite -addrA addrC   [RHS]addrC. rewrite addrA.  
+by have -> : (-z + x -x)%R = (-z)%R by rewrite -addrA addrN addr0. 
+Qed.
+
+(* Cannot use addrK_N2 with x = - x' because the - - x' does not get used when
+   pattern checking. *)
+Fact addrK_N2o z x y : ( x + y - z - x)%R  = (y - z)%R .
+Proof.
+rewrite -addrA addrC   [RHS]addrC. rewrite addrA.  
+by have -> : (-z - x + x)%R = (-z)%R by  rewrite -addrA  addNr addr0.
+Qed.
+
+Fact addrK_N2oc z x y : ( y + x - z - x)%R  = (y - z)%R .
+Proof.
+rewrite -!addrA.
+by have ->: (x + (- z - x))%R = (- z)%R by
+  rewrite addrC -addrA addNr addr0. 
+Qed.
+
+Fact addrK_N3  z x y : (x + (y + (- x +  z)))%R  = (y + z)%R .
+Proof.
+by rewrite 2!addrA addrC  addr_opp2e addrC.
+Qed.
+
+
+Fact addrK_N3o  z x y : (- x + (y +  x +  z))%R  = (y + z)%R .
+Proof.
+by rewrite 2!addrA  addrC addr_opp2b addrC.
+Qed.
+
+Fact addrK_N3o'  z x y : (- x + (y +  (x +  z)))%R  = (y + z)%R .
+Proof.
+by rewrite 2!addrA  addrC addr_opp2b addrC.
+Qed.
+
+Fact addrK_N1X  z x y : (-x -y + (x + z))%R = (z - y)%R.
+Proof.
+by rewrite !addrA   addrC addrK_N1. 
+Qed.
+
+Fact addrK_N1X'  z x y : (-x -y + x + z)%R = (z - y)%R.
+Proof.
+by rewrite    addrC addrK_N1. 
+Qed.
+
+Fact addrK_N2X  z x y w : (-x -y + (x + z + w))%R = (z - y + w)%R.
+Proof.
+by rewrite !addrA addrC addrK_N1X' addrC. 
+Qed.
+
+End Z_Modules.
+
+Section Num_Domain.
+
+Variables (R : numDomainType).
+Implicit Types x y : R.
+
+Fact mulr_oppK: forall x y, (- ( (- x) * y))%R = (x * y)%R.
+Proof.
+by move => x y; rewrite -mulN1r -[X in (-1 * (X * _))%R]mulN1r
+   -mulrA mulrA mulrNN mul1r mul1r.
+Qed.
+
+End  Num_Domain.
+
+Section Int_Domain.
+Local Open Scope ring_scope.
+
+Implicit Types x y : int.
+
+Fact leq_modz: forall (m d: int), (0 < d) -> (0 <= m) ->  (m %% d <= m)%Z.
+Proof.
+move => m d Hd ; rewrite -(@divz_ge0 m _ Hd) (mulger Hd) mul0r.
+have:= divz_eq m d; move/eqP; rewrite - subr_eq => H; rewrite -(eqP H).  
+by rewrite lerBrDl addr0 . 
+Qed.
+
+Lemma eqz_modDlX p m n d : (p + m == n %[mod d])%Z = (p == n - m  %[mod d])%Z.
+Proof.
+rewrite -{1}[m]addr0 -{1}[n]addr0. 
+have -> : 0 = (- m + m)%Z by rewrite addNr.
+by rewrite 3!addrA eqz_modDr -addrA addrN addr0.
+Qed.
+
+Lemma eqz_modDrX p m n d : (p + m == n %[mod d])%Z = (m == n - p  %[mod d])%Z.
+Proof.
+rewrite -{1}[m]addr0 -{1}[n]addr0. 
+have -> : 0 = (- p + p)%Z by rewrite addNr.
+replace (n + ( - p + p))%Z with (p +( n - p)). 
+by rewrite eqz_modDl addNr addr0.
+by rewrite addrC addrA.  
+Qed.
+
+
+End Int_Domain.
+
+(** ** Quantifier free Presburger formula and negation free normal forms *)
 
 Section QFLIA.
 
@@ -44,8 +339,7 @@ move=> f1 f2; apply: (iffP idP) => [| <-].
 - by case: f1 => [| m] n t /=; rewrite !eqxx.
 Qed.
 
-Canonical QFLIA_af_eqMixin := EqMixin eq_QFLIA_afP.
-Canonical QFLIA_af_eqType := Eval hnf in EqType QFLIA_af QFLIA_af_eqMixin.
+HB.instance Definition _ := @hasDecEq.Build _ _ eq_QFLIA_afP.
 
 Fixpoint eq_QFLIA_formula (f1 f2 : QFLIA_formula) :=
   match f1, f2 with
@@ -68,9 +362,7 @@ move=> f1 f2; apply: (iffP idP) => [| <-].
 - by elim: f1 => //= fl -> fr ->.
 Qed.
 
-Canonical QFLIA_formula_eqMixin := EqMixin eq_QFLIA_formulaP.
-Canonical QFLIA_formula_eqType :=
-  Eval hnf in EqType QFLIA_formula QFLIA_formula_eqMixin.
+HB.instance Definition _ := @hasDecEq.Build _ _  eq_QFLIA_formulaP.
 
 Definition QFLIA_interpret_af (I : 'cV[int]_dim) (f : QFLIA_af) : bool :=
   match f with
@@ -158,10 +450,11 @@ elim: f b1 b2 => //=.
   rewrite (IH1 true b2) (IH2 true b2) big_distrlr big_allpairs_dep /=.
   by apply/eq_bigr => i _; apply/eq_bigr => j _; rewrite big_cat.
 - move=> q b1 []; last by case: b1; rewrite !big_cons !big_nil !andbT !orbF.
-  case: q => [| m] n t /=; first by
-    rewrite !big_cons !big_nil /= -(ltz_addr1 _ (_ - _ + _)) addrAC
-            subrK linearN mulNmx (mxE oppmx_key) -opprD oppr_gt0 -leNgt;
-    case: b1; rewrite orbF andbT.
+  case: q => [| m] n t /=; 
+    first by rewrite !big_cons !big_nil /= linearN mulNmx  -opprD /= ;
+          case : b1 =>//=; rewrite orbF andbT oppmxE opprD -oppM3 -lerNr -real_ltNge 
+                                  //=  oppr0 [(n + 1)%R]addrC -addrA  ltz1D.
+
   suff Hdvdz x : (m.+1 %| x)%Z =
                  ~~ has (fun i => m.+1 %| (i%:Z + x)%R)%Z (iota 1 m)
     by rewrite Hdvdz -all_predC -big_all; case: b1 => /=;
@@ -176,11 +469,46 @@ elim: f b1 b2 => //=.
     have H: ((x %% m.+1)%Z < m.+1)%R by rewrite ltz_pmod.
     rewrite mem_iota absz_gt0 subr_eq0 neq_lt H orbT /= add1n ltnS.
     move: (ltW H); rewrite -lez_nat ler_def abszE => /eqP ->.
-    rewrite ler_sub_addl intS ler_add2r -intS.
-    move/implyP; rewrite implybN -ltNge -(addr0 1%R) ltz_add1r => /implyP H0.
-    apply/dvdz_mod0P/eqP; rewrite eq_le modz_ge0 // {}H0 //; apply/dvdz_mod0P.
-    by rewrite -addrA modzDl addrC {1}(divz_eq x m.+1) -addrA modzMDl subrr.
-Qed.
+
+    move: H.  rewrite !intS ( modz_dvd x (1 + m)%Z) intS.
+    set X1m:= (x %% (1 + m))%Z. move =>H H1.
+    have Hcz: forall (k:nat), ((k == 0) || (0 < k))%nat; 
+      first by move =>k; elim :k =>//=.
+    case/orP: (Hcz m) => [ Hmz| Hmnz]. 
+    - move :H; rewrite (eqP Hmz) addr0 => H.   (* X1m in int, could be negative ! *)   
+      have H2m: 1 + m != 0%R by rewrite (eqP Hmz).  
+      have := (modz_ge0 x (d:=1+m))  H2m.
+      rewrite -/X1m => H' {H2m}.
+      move :H. rewrite -[X in (_ < X)%R]add0r.
+      rewrite ltzD1.  move : H'. move => HH1 HH2. 
+      by apply/eqP; symmetry; apply: le_anti =>//=; apply/andP.
+    -  (* Here 0 <= X1m , in case 0 = X1m, Goal satisfied, otherwise apply H1*)
+        have HX1m: (0%R <= X1m)%R by
+            rewrite /X1m;  apply: modz_ge0; 
+            have HX1m: 0 <  (1 + m)%R; first by apply: (@addr_gt0 int 1 m) =>//= ;    
+            apply/eqP => Hn //=.
+        
+        case HX1m':(0%Z == X1m) =>//=; first  by rewrite eq_sym HX1m'.
+
+        (* now 0 <> X1m, we use 0 < X1m to establish the condition/implicant in H1*)           
+        have H1pre: is_true (1 + Posz m - X1m <= Posz m)%R.
+           rewrite lerBlDl; apply: lerD =>//=.
+           by have HX1mP: (1 <= X1m)%R by rewrite ltler HX1m' // in HX1m.
+ 
+      move:  {H1 H1pre} (H1 H1pre) ; rewrite /X1m => HFalseDiv.
+      exfalso. move: HFalseDiv. 
+      
+      set k:= (1 + Posz m)%R.
+      set k':= Posz (1 +  m)%R.
+
+      rewrite /negb.   
+      case Hczdiv: (k %| (k - (x %% k')%Z + x)%R)%Z =>//= _.
+      move: Hczdiv. rewrite addr_opp2. 
+      have -> : k = k' by []. move => {k} //=.
+      by rewrite modz_dvd modzDl  -modzDm  modzNm  modzDm subrr //=.
+
+Qed.    
+
 
 Lemma QFLIA_NF_correctness b1 I (f : QFLIA_formula) :
   QFLIA_interpret_formula I f =
@@ -230,7 +558,7 @@ Qed.
 
 Lemma ler_mod m d : (0 <= m -> 0 < d -> (m %% d)%Z <= m)%R.
 Proof.
-by move=> H H0; rewrite {2}(divz_eq m d) ler_addr;
+by move=> H H0; rewrite {2}(divz_eq m d) lerDr;
   apply: mulr_ge0; [rewrite divz_ge0 | exact: ltW].
 Qed.
 
@@ -256,7 +584,7 @@ Definition fs_leq1 (b : bool) : seq (int * 'cV[int]_dim) :=
   pmap (fun f : int * 'cV[int]_(1 + dim) =>
           if (if b then f.2 0 0 <= 0 else 0 <= f.2 0 0)%R
           then None
-          else let c := (- (prod_coef %/ f.2 0 0)%Z)%R in
+          else let c := (- (prod_coef %/ f.2 ord0 ord0)%Z)%R in
                Some (c * f.1, c *: dsubmx f.2)%R)
        fs_leq.
 
@@ -337,14 +665,74 @@ apply/eq_in_all => -[/= n t] Hf.
 rewrite -(vsubmxK t) tr_col_mx (mxE col_mx_key);
   case: splitP => // j _;
   rewrite ord1 {j} vsubmxK mul_row_col 2!mxE big_ord1 3!mxE lshift0.
-by (case: (ltrgtP (t 0 0) 0)%R (prod_coef_cml Hf);
+
+(case: (ltrgtP (t 0 0) 0)%R (prod_coef_cml Hf);
       last by move=> -> _ /=; rewrite mul0r add0r andbT);
-  rewrite dvdz_eq => /= H /eqP H0;
+  rewrite dvdz_eq => /= H /eqP H0; 
   rewrite ?andbT linearZ /= -scalemxAl (mxE scalemx_key) -mulrDr
-          -1?[RHS](ler_nmul2l H) -1?[RHS](ler_pmul2l H) mulrA mulrN
-          [X in (- X)%R](mulrC (t _ _)) H0 mulNr -mulrN mulrCA ler_pmul2l
-          ?ltz_nat ?prod_coef_gt0 // -(subr_ge0 (- _)%R) opprK (addrCA n).
+          -1?[RHS](ler_nmul2l H) -1?[RHS](ler_pmul2l H);
+  rewrite lerXoppr   -{2}H0 -!mulNr  -mulrA;
+  [ have Hsign:= ltr0_sgz H | have Hsign:= gtr0_sgz H ];
+  rewrite Hsign mulNr  -mulrN  mulrCA ?mul1r;
+
+  (*clarify notations, works in both subgoals*)
+  set xA:= t ord0 ord0 in H0 H *;
+  set xB:= ((dsubmx t)^T *m I)%R ord0 ord0;
+  set xC:= ((prod_coef %/ xA)%Z * xA)%R.
+  (* reached here 2 subgoals *)
+- (* Do first subgoal sgz = -1 *)
+  rewrite mulN1r opprK.
+  set xD:=  (prod_coef %/ `|xA|)%N.
+  
+  rewrite mulrCA; (* This worked despite coercions/Posz present *)
+  rewrite  -mulrDr; 
+  replace (n + (xA * x + xB))%R with (n + xB + xA * x)%R; 
+   last by rewrite -addrA; congr (_ + _)%R; rewrite addrC.  
+
+  have HxD:= prod_coef_gt0.  
+ (* Need to establish 0 < xD, simplest is to use H0 ... only issue is type
+    and presence of Posz  coercion *)
+  case: (orP (eq_orgt0 xD)); last by move =>HmulNZ ; rewrite pmulr_rge0. 
+    - rewrite/xD => H1; exfalso.
+      move : H1;   
+      have HxA:  xA = ( -1 * `|xA|)%R; first  by rewrite -Hsign -intEsg.
+      have {HxA}:=f_equal (fun x => (-1 * x)%R) HxA.
+      rewrite mulrA mulrNN !mul1r // => Hrew.
+      have H1: (prod_coef %/ xA)%Z  = ((- 1) * (prod_coef %/ `|xA|)%Z)%R
+      by  rewrite   -Hrew; replace (-1 * xA)%R with (- xA)%R;
+          [rewrite divzN mulN1r opprI |  rewrite mulN1r ]; move => //= .
+      move/eqP =>H2.
+      move:H1. 
+      have H3: (prod_coef %/ `|xA|)%Z =  prod_coef %/ `|xA| by apply: divnzN.
+      rewrite H2 in H3. rewrite H3 mulr0 => H4. 
+      move: H0; rewrite H4 mul0r => H5.
+      move: HxD; replace prod_coef with 0; first by []. 
+      by apply/eqP; rewrite  -eqz_nat //=; apply/eqP.
+   
+- (* second subgoal *)
+  rewrite subr0 [X in _ = X]lerXoppl mulr_oppK.
+  rewrite [X in _ = (0 <= (_ + X))%R]mulrC.
+  have HxA:= (gtz0_abs H). (* Just hit the same tar pit !*)
+  have H3: (prod_coef %/ `|xA|)%Z = prod_coef %/ `|xA| by apply: divnzN.
+  rewrite -H3.
+  have H4: (prod_coef %/ `|xA|)%Z  = (prod_coef %/ xA)%Z by
+    congr (fun x => divz prod_coef x);  rewrite -[X in _ = X]HxA.
+
+  rewrite -H4.  rewrite -[(_ * x * xA)%R]mulrA  -mulrDr.
+
+  set xD:=  (prod_coef %/ `|xA|)%N in H3 * .
+  have HxD:= prod_coef_gt0.
+  case: (orP (eq_orgt0 xD)) => [HxDZ | HxDP]. 
+   - by exfalso; rewrite /xD in HxDZ H3;
+       move:H0; rewrite -H4 H3 (eqP HxDZ) mul0r => Hr; move: HxD; 
+      rewrite -ltz_nat -Hr.
+
+   - replace (n + (xA * x + xB))%R with (n + xB + xA * x)%R; 
+            last by rewrite -addrA; congr (_ + _)%R; rewrite addrC.
+     rewrite pmulr_rge0. by rewrite mulrC.  
+       by rewrite H3.
 Qed.
+
 
 Lemma fs_mod_correct x I :
   all (QFLIA_interpret_af (col_mx (const_mx x) I))
@@ -372,9 +760,13 @@ by rewrite prednK ?ltz_nat ?muln_gt0 /= ?absz_gt0 //
            (mulrC _%:Z%Z) dvdz_mul2l // addrA.
 Qed.
 
+(* int_Ring removed from mathcomp ( when?), adding a definition for 
+   documentation purpose*)
+Definition int_Ring:= int.
+
 Lemma exists_conj_elim_mod_correct (x : int) t (I : 'cV_dim) :
   QFLIA_interpret_formula I (exists_conj_elim_mod x t) =
-  all (fun f : nat * int_Ring * 'cV_dim =>
+  all (fun f : nat *  int_Ring  * 'cV_dim =>
          (f.1.1.+1 %| (f.1.2 + x + ((f.2 + t)^T *m I) 0 0)%R)%Z)
       fs_mod1.
 Proof. rewrite QFLIA_conj_all all_map; exact/eq_in_all. Qed.
@@ -387,6 +779,7 @@ Lemma exists_conj_elimP I :
              [seq QFLIA_divisible f.1.1 f.1.2 f.2 | f <- fs_mod]))
     (QFLIA_interpret_formula I exists_conj_elim').
 Proof.
+
 set bs := fun fl => [seq (true, f.1 + (f.2^T *m I) 0 0)%R | f <- fs_leq1 fl].
 set P := fun x => all
   (fun f => f.1.1.+1 %| (f.1.2 + x + (f.2^T *m I) 0 0)%R)%Z fs_mod1.
@@ -426,19 +819,20 @@ Opaque fs_leq0 fs_leq1 fs_mod0 fs_mod1.
 apply/(iffP andP) => -[H0 H]; (split; first apply: H0);
   move: {H0} H; rewrite /bs /nilp !size_map -!/(nilp _) orbC; case: ifP => _.
 - rewrite QFLIA_disj_has has_map => /hasP [i].
-  rewrite mem_iota /= add0n exists_conj_elim_mod_correct /= => H H0.
+  rewrite mem_iota /= add0n exists_conj_elim_mod_correct /= => H H0. 
   by exists i; apply/allP => /= f /(allP H0) /=; rewrite addr0.
 - rewrite QFLIA_conj_all => /all_allpairsP /= H lb ub.
   move=> /mapP [/= j Hj -> {lb}] /mapP [/= i Hi -> {ub}].
   move: (H i j Hi Hj); rewrite QFLIA_disj_has has_map => /hasP [/= k].
   rewrite mem_iota /= add0n exists_conj_elim_mod_correct => H0 /andP [H1 H2].
   exists (j.1 + (j.2^T *m I) 0 0 + k)%R; move: H1.
-  rewrite -{1}(addr0 (j.1 + _)%R) ler_add2l /=
-          linearD linearN mulmxDl mulNmx mxE (mxE oppmx_key) addrA
-          2!(addrAC _ (- k%:Z)%R) (addrAC _ (- j.1)%R) -2!addrA -2!opprD addrA
-          subr_ge0 => -> /=.
+  rewrite -{1}(addr0 (j.1 + _)%R) lerD2l /=
+          linearD linearN mulmxDl mulNmx mxE mxE  addrA
+          2!(addrAC _ (- k%:Z)%R)  (addrAC _ (- j.1)%R) -2!addrA.
+  rewrite  oppmxE  -2!opprD addrA subr_ge0 => -> /=.
   apply/allP => /= f; move/(allP H2); congr dvdz.
   by rewrite linearD /= mulmxDl mxE (addrAC j.1) !addrA addrAC.
+
 - case=> x Hx; rewrite QFLIA_disj_has has_map; apply/hasP.
   exists `|x %% prod_mod|%Z => /=.
   + rewrite mem_iota /= add0n -ltz_nat gez0_abs; first exact: ltz_pmod.
@@ -448,8 +842,22 @@ apply/(iffP andP) => -[H0 H]; (split; first apply: H0);
     apply/allP => /= f Hf; move: (allP Hx _ Hf).
     rewrite addr0 !dvdzE'; congr eq_op; apply/eqP.
     rewrite eqz_mod_dvd !(addrC f.1.2) -!(addrA _ f.1.2)
-            opprD addrA (addrAC x) -addrA subrr addr0 -eqz_mod_dvd modz_dvdm //.
-    exact: prod_mod_cm.
+            opprD addrA (addrAC x)  -addrA.
+    rewrite -oppM -addrC  -addrA.
+    set F2:= (Z in ( - _   + ( _ +Z) )%R).
+    rewrite -/F2 addrC oppM3 opprI; last by [].
+    rewrite addrC [Z in ( _ + (_ Z) )%R]addrC oppM -addrA addrC. 
+
+    set xpm:= ((x %/ prod_mod)%Z * prod_mod)%R.
+    have ->: (- x + xpm + (- f.1.2 - F2 + (F2 + x)) + f.1.2)%R = xpm;
+     first by rewrite addrC  addrA addrC addrA 
+         -2![(Z in ( Z + _)%R)]addrA [(Z in ( (_ + Z) + _)%R)]addrA
+        [(- F2 + (F2 + _))%R]addrA addNr add0r  
+        [(Z in (- _ + (Z ))%R)]addrC
+        [(- _ + _)%R]addrA  addNr add0r
+        addrA addrN add0r. 
+    by rewrite /xpm mulrC; apply: dvdz_mulr; apply prod_mod_cm.
+
 - move=> H; rewrite QFLIA_conj_all; apply/all_allpairsP => /= i j Hi Hj.
   case: {H} (H _ _ (map_f _ Hj) (map_f _ Hi)) => x /and3P [/= H H0 H1].
   rewrite QFLIA_disj_has has_map; apply/hasP.
@@ -457,21 +865,108 @@ apply/(iffP andP) => -[H0 H]; (split; first apply: H0);
     last (rewrite /= gez0_abs ?modz_ge0 // ?eqz_nat ?lt0n_neq0 //;
           apply/andP; split=> /=).
   + by rewrite mem_iota /= add0n -ltz_nat gez0_abs ?ltz_pmod //;
-       apply: modz_ge0; rewrite eqz_nat; exact: lt0n_neq0.
-  + rewrite linearD linearN /= mulmxDl mulNmx (mxE addmx_key) (mxE oppmx_key).
-    rewrite addrA 3!(addrAC _ (- _)%R) -2!addrA -!opprD subr_ge0.
-    apply: (le_trans _ H0).
-    rewrite -subr_ge0 addrA (opprD (_ + _)%R) addrA subr_ge0.
-    by apply: ler_mod => //; rewrite subr_ge0.
-  + rewrite exists_conj_elim_mod_correct;
+       apply: modz_ge0; rewrite eqz_nat; exact: lt0n_neq0.    
+  + rewrite linearD linearN /= mulmxDl mulNmx mxE mxE.
+    rewrite addrA 3!(addrAC _ (- _)%R) -2!addrA -!opprD. 
+     rewrite oppM.
+
+    set Z1:= (Z in (((_ - Z)%R %% _))%Z).
+    set I2:= ((i.2^T *m I) 0 0)%R in H0 * .
+    set J2:= ((j.2^T *m I) 0 0)%R in H *.
+    set JJ:= ((- (j.2^T *m I)) 0 0)%R.
+    have Z1J2: Z1 = (j.1 +  J2)%R. (* could have avoided this!!*)
+      - rewrite /Z1 /J2. congr (_ + _)%R.
+        by rewrite mxE.
+
+    rewrite addrA.  
+    have Hrew:  (i.1 + (- ((x - Z1) %% prod_mod)%Z - j.1) + I2 + JJ)%R
+              = (i.1 + I2 - (j.1 + J2) - (((x - Z1) %% prod_mod)%Z))%R.
+    -   apply subr0_eq; symmetry; rewrite !opprD !opprI //=. 
+        set J2B:= (Z in ( _ + (_ + ((_ + (_  - Z)) + _)))%R).
+        have -> : JJ = (- J2B)%R by rewrite /JJ /J2B 2!mxE.
+        rewrite -/J2B.
+        have <- : J2 = J2B by rewrite /J2 /J2B mxE.
+        set TPM:= (((x + (- j.1 - J2)) %/ prod_mod)%Z * prod_mod)%R.
+        set TL1:= (Z in ((Z + _) + _)%R).
+        set TR1:= (Z in ( _ + (Z + _))%R).
+        set TR2:= (Z in ( _ + (_ + Z))%R).
+        rewrite addrC 2!addrA -[(_ + TL1)%R]addrA.
+        have E1: (TR2+TL1)%R = (i.1  - j.1 )%R. 
+            rewrite /TR2 /TL1.
+            rewrite addrC addrA .  
+            have ->:  (- x + (j.1 + J2) + TPM - j.1)%R = (- x + J2 + TPM)%R.
+              rewrite -2!addrA. 
+              have -> : (j.1 + J2 + (TPM - j.1))%R = (J2 + TPM)%R.
+              rewrite addrC addrA addrC; congr (_ + _)%R. 
+                + by rewrite -addrA addNr addr0.
+                + by rewrite addrA.
+            
+            rewrite addrC;
+            set TR4:= (i.1 + _ + _)%R;
+            have -> :  TR4 = (i.1  - j.1 + TPM )%R; last by rewrite addrA addrK_N1.
+            rewrite /TR4 addrA;
+            set TR5:= (- x + _ + _)%R;
+            set TR6:= (x - _ - _)%R;
+            rewrite addr_opp2 -addrA; congr (_ + _)%R;
+            rewrite  /TR6 addrA /TR5 addrC addrA  addrK_N3o.
+
+            by rewrite addrA addr_opp2b.
+              
+      rewrite E1 /TR1.  
+        set ZZ:=(Z in (_ = (Z + _) + _)%R).
+        have -> : ZZ = (- I2 +  J2)%R.
+          * rewrite /ZZ -2!addrA addrC -addrA /TR2 /TL1.
+            replace (i.1 - j.1 - i.1)%R with (- j.1)%R.
+            rewrite -addrA.
+            by have ->: (j.1 + J2 - j.1)%R = J2 by rewrite addrC addrA addNr add0r.
+            by rewrite -addrA addrC -addrA  addNr  addr0.
+            
+        by rewrite addrC [(-_ + _ + _)%R] addrC [(_ + (- _ + _))%R]addrA
+            addrN add0r addNr.   
+
+    rewrite Hrew Z1J2.
+    
+    have Hiv': (j.1 + J2 <= x <= i.1 + I2)%R by apply/andP; split. 
+    case/andP : (itv_sepr Hiv') => Hiv1 Hiv2 .
+    have Hmaj:=  ltz_pmod (x - (j.1 + J2))%R H_prodm . 
+    rewrite subr_ge0.
+    have Hlmod:= leq_modz H_prodm Hiv1. 
+    by exact:le_trans Hlmod Hiv2. 
+  
+  +  rewrite exists_conj_elim_mod_correct;
       apply/allP => /= f Hf; move: (allP H1 _ Hf);
       rewrite !dvdzE'; congr eq_op; apply/eqP.
-    rewrite addrAC linearD /= mulmxDl (mxE addmx_key) addrA
-            (addrAC f.1.2 (_ + _)%R) -(addrA (f.1.2 + _)%R) eqz_modDl
-            eqz_mod_dvd (addrAC j.1) opprD addrA -eqz_mod_dvd modz_dvdm //.
-    exact: prod_mod_cm.
-Transparent fs_leq0 fs_leq1 fs_mod0 fs_mod1.
-Qed.
+    rewrite addrAC linearD /= mulmxDl mxE addrA.
+
+    set I2:= ((i.2^T *m I) 0 0)%R in H0 * .
+    set J2:= ((j.2^T *m I) 0 0)%R in H *.
+    set F2:=  ((f.2^T *m I) 0 0)%R.
+    set F2':=  (Z in ( ( ((_ + Z) + _) %% _ )%Z == _)).
+    have <-: F2 = F2' by rewrite /F2 /F2' mxE. clear F2'.
+    set FJ2:= (Z in ( _ == ( ( _ + Z ) %% _ )%Z)).
+    have -> : FJ2%R = (F2 + J2)%R by rewrite /F2 /J2 /FJ2 mxE. clear FJ2. 
+    rewrite eqz_modDrX. rewrite 2!addrA.
+    have ->: (f.1.2 + j.1 + (x - (j.1 + J2)))%R =   (f.1.2 + x -  J2)%R.
+      by rewrite addrA addrC -addrA addrC addrA oppM addrA addrC
+       -[(_ + _ + _ -_)%R]addrA [Z in ( _ +  j.1 + Z )%R]addrC -addrA addrC
+        [(_ + (- _ + _))%R]addrA addrN add0r.
+
+    set TMod :=(((x - (j.1 + J2)) %/ prod_mod)%Z * prod_mod)%R.
+    have -> :  (f.1.2 + x - J2 - TMod + F2 + J2 - (f.1.2 + F2))%R = 
+            (x -TMod )%R.
+
+    set TR1:= (Z in  ((Z  )  + _ = _)%R).
+    have -> : TR1 =  (f.1.2 + x - TMod + F2)%R
+        by rewrite /TR1 -!addrA; apply add_eval;
+           rewrite [(F2+J2)%R]addrC  addrK_N3o'.
+    by rewrite addrC oppM -![(_ + _ - _ + _)%R]addrA  addrK_N2X addrC !addrA
+       [RHS]addrC -!addrA -addr_opp2  addrN add0r.
+     
+    rewrite -eqz_modDrX -[Z in (_ == Z %[mod _])%Z]add0r  eqz_modDr 
+            /TMod eqz_mod_dvd subr0. 
+    exact :(dvdz_mull _ ( prod_mod_cm Hf)).
+  Transparent fs_leq0 fs_leq1 fs_mod0 fs_mod1.
+Qed.    
 
 End QE_principle.
 
