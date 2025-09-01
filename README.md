@@ -1,10 +1,11 @@
-# This repo: 
+# Adapting Vass to current version of Coq/Mathcomp
 ## Basics
 1. derived from https://github.com/pi8027/vass.git
 1. adapted to work on current coq/mathcomp versions, as of 8/2025
    - includes use of HB
    - removed many (not all) deprecation warnings
-1. some porting/adaptation difficulties resolved with rather lengthy non optimal code
+1. some porting/adaptation difficulties still use rather lengthy code. May perform cleanups to reduce this.
+1. owes much to list of changes and renamings in https://github.com/math-comp/math-comp/blob/master/CHANGELOG.md
 
 ## Concerning copyrights: 
  - see original https://github.com/pi8027

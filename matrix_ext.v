@@ -1,5 +1,5 @@
 From mathcomp Require Import all_ssreflect all_fingroup all_algebra zmodp.
-Require Import utils algebra_ext.
+Require Import utils utils2 algebra_ext.
 Import GroupScope Order.TTheory GRing.Theory Num.Theory.
 
 (******************************************************************************)
@@ -13,17 +13,6 @@ Unset Printing Implicit Defensive.
 (******************************************************************************)
 (** ** convenience.                                                               *)
 (******************************************************************************)
-Section Z_Modules.
-
-Variables (R : zmodType).
-Implicit Types x y : R.
-
-(* The involutive character of - oppr is simply expressed here*)
-Lemma opprI x y : (- - x  = x )%R.
-Proof.
-by apply/eqP; rewrite eqr_oppLR.
-Qed.
-End Z_Modules.
 
 Section R_convenience.
 

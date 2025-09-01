@@ -6,6 +6,7 @@ logic/LRA.v
 logic/Presburger.v
 matrix_ext.v
 utils.v
+utils2.v
 
 -R . vass
 
