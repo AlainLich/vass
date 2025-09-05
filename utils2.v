@@ -7,6 +7,14 @@ Set Implicit Arguments.
 Unset Strict Implicit.
 Unset Printing Implicit Defensive.
 
+(******************************************************************************)
+(** ** Generak functions.                                                  *)
+(****************************************************************************)
+
+
+(* Added this definition, apparently removed from library *)
+Definition prod_curry (A B C: Type) (f: A -> B -> C)  (p: A * B)
+   := let (p1,p2) := p in f p1 p2.
 
 (******************************************************************************)
 (** **  Z Module convenience.                                                          *)
@@ -285,3 +293,28 @@ Qed.
 
 
 End Int_Domain.
+
+(******************************************************************************)
+(** ** Simplifications in fields                                           *)
+(******************************************************************************)
+
+Section R_RealField.
+
+Variables (R : realFieldType).
+Implicit Types x y : R.
+
+
+Lemma mulf_divA (x1 y x2:R)  : (x1  * (x2 / y) = (x1 * x2) / y)%R.
+Proof.
+rewrite -(divr1 x1)  (mulf_div x1 1 x2 y) (divr1 x1) mul1r //=.
+Qed.
+
+Lemma mulf_divB (x1 y x2:R)  : ((x1 / y) * x2 = (x1 * x2) / y)%R.
+Proof.
+by rewrite -{2}(divr1 y) -mulf_div  invr1 divr1.
+Qed.
+
+End R_RealField.
+
+
+

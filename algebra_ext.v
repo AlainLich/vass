@@ -11,7 +11,7 @@ Lemma addr_lteif0r b (R : numDomainType) (x y : R) :
 Proof. by rewrite addrC -{1}(opprK x) subr_lteif0r. Qed.
 
 (******************************************************************************)
-(*  extensions for interval. Start with PO:= partial order                    *)
+(*  extensions for interval.                                                  *)
 (******************************************************************************)
 
 Section IntervalPo.
@@ -20,8 +20,8 @@ Local Open Scope order_scope.
 
 
 (** Note: Order.disp is used to give alternative keys to multiple HB instances
-  which apply on the same type. (e.g. several "orders" are used with nat, see example
-  the second is related to divisibility!)
+  which apply on the same type. (e.g. several "orders" are used with nat, incl. 
+  divisibility)
 *)
 
 Variable (disp : Order.disp_t) (T : porderType disp).
@@ -45,7 +45,7 @@ Definition itv_nonempty (i : interval) :=
 End IntervalPo.
 
 (******************************************************************************)
-(*  extensions for interval. Now Lattice case.                                *)
+(*  extensions for interval :  Lattice case.                                  *)
 (******************************************************************************)
 Section IntervalLattice.
 
@@ -63,11 +63,8 @@ Qed.
 End IntervalLattice.
 
 (******************************************************************************)
-(*  extensions for interval. Now Interval with total order.                   *)
+(*  extensions for interval : Interval with total order.                      *)
 (******************************************************************************)
-
-(*  See (in  ssreflect.order) SemiLattice definitions *)
-
 Section IntervalTotal.
 
 Local Open Scope order_scope.

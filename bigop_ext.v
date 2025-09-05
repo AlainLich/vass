@@ -36,7 +36,6 @@ Definition clone_law op :=
 
 End Definitions.
 
-
 Module Import Exports.
 Coercion operator : law >-> Funclass.
 Notation "[ 'semilattice' 'of' f ]" := ( @clone_law _ _ f _ id _ _ _ id)
@@ -142,7 +141,11 @@ Qed.
 
 
 (** This is a replacement for deprecated, see note in  bigop.v concerning
-  convertibility of [enum A] and [filter A (index_enum T)] 
+  convertibility of [enum A] and [filter A (index_enum T)].
+  This will need rework more inline with CHANGELOG:
+   >Replaced the use of the accidental convertibility between `enum A` and
+   > `filter A (index_enum T)` with more explicit lemmas `big_enumP`, 
+   > `big_enum`, `big_enum_cond`, `big_image` added to the `bigop` library.
 *)
 Fact re_filter_index_enum : forall [T : finType] (P : pred T), 
 [seq x <- index_enum T  | P x] = enum P.

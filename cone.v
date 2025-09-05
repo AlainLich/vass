@@ -1,36 +1,15 @@
 From mathcomp Require Import all_ssreflect all_fingroup all_algebra zmodp.
-
 Import GroupScope Order.TTheory GRing.Theory Num.Theory.
-
 Require Import utils bigop_ext matrix_ext.
 Import Fourier_Motzkin.
-
-
-Set Implicit Arguments.
-Unset Strict Implicit.
-Unset Printing Implicit Defensive.
-
-(******************************************************************************)
-(*  Convenience                                                               *)
-(******************************************************************************)
-Section Order.
-Local Open Scope order_scope.
-
-Variable (R : numDomainType).
-
-Lemma ltler  (x y : R): (x <= y) = (x == y)  || (x < y).
-Proof. by rewrite le_eqVlt eq_sym. Qed.
-
-Lemma ltler_I (x y:R): (x < y) -> (x <=y ).
-Proof. by  rewrite le_eqVlt => H; apply/orP; right. Qed.
-
-
-End Order.
 
 (******************************************************************************)
 (*  Convex cones                                                              *)
 (******************************************************************************)
 
+Set Implicit Arguments.
+Unset Strict Implicit.
+Unset Printing Implicit Defensive.
 
 
 Section ConeDef.

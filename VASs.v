@@ -1,7 +1,6 @@
 From mathcomp Require Import all_ssreflect all_algebra.
 Import GRing.Theory Num.Theory.
 
-(* TBD: is this used (?) *)
 (******************************************************************************)
 (*  Vector addition systems                                                   *)
 (******************************************************************************)
@@ -12,11 +11,10 @@ Unset Printing Implicit Defensive.
 
 Section VASs.
 
-    (* VAS : This notation "T ^ n" is for functions of "'I_n" into T. *)
+    (* The notation "T ^ n" is for functions of "'I_n" into T. *)
 Variable (dim : nat) (VAS : seq (int ^ dim)).
 
 Definition marking : Type := nat ^ dim.
-
 
 Definition next (m : marking) (a : int ^ dim) : option marking:=
   if [forall i, 0 <= a i + m i]%R
@@ -33,7 +31,7 @@ rewrite /next /step; case: ifP; rewrite eqE /= => /forallP H.
 - suff -> : forall (f1 f2 : marking), (f1 == f2) = [forall i, f1 i == f2 i].
   by apply/eq_forallb =>/=  i; rewrite ffunE -(gez0_abs (H i)) .
 - (* Now need to discuss equality of markings*)
-  move=> f1 f2. apply/Bool.eq_iff_eq_true; split. (* change a boolean ==  to 2 implications*)
+  move=> f1 f2. apply/Bool.eq_iff_eq_true; split.
   + by move/eqP/ffunP => H0; apply/forallP => i; rewrite H0.
   + by move/forallP =>H0; apply/eqP/ffunP =>i; rewrite (eqP (H0 i)).
 - by apply/esym/forallP =>//= H0; apply H => i; rewrite (eqP (H0 i)).
